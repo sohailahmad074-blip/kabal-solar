@@ -1,0 +1,6 @@
+{
+  "name": "SolarCraft ERP - Solar Shop Management",
+  "description": "Comprehensive business management system for solar energy shops: invoicing, quotation generator, purchasing, customer CRM, solar inventory, expense tracking, and solar sizing calculator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

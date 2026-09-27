@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "products": {
+      "title": "Products",
+      "description": "Solar inventory items and equipment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "salePrice": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "stock": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "salePrice", "costPrice", "stock"]
+    },
+    "invoices": {
+      "title": "Invoices",
+      "description": "Solar customer invoices and quotes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "customerName": { "type": "string" },
+        "grandTotal": { "type": "number" },
+        "status": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "invoiceNumber", "customerName", "grandTotal", "status", "date"]
+    },
+    "customers": {
+      "title": "Customers",
+      "description": "Customer profiles and ledgers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "suppliers": {
+      "title": "Suppliers",
+      "description": "Vendor and distributor accounts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "purchaseOrders": {
+      "title": "Purchase Orders",
+      "description": "Supplier purchase orders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "poNumber": { "type": "string" }
+      },
+      "required": ["id", "poNumber"]
+    },
+    "expenses": {
+      "title": "Expenses",
+      "description": "Business expenses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "amount", "category"]
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Company settings and configurations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyName": { "type": "string" }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestoreRules": "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}"
+}
