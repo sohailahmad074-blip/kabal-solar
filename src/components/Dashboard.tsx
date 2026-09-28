@@ -19,7 +19,9 @@ import {
   Lock,
   BarChart3,
   Zap,
-  MessageCircle
+  MessageCircle,
+  ArrowRightLeft,
+  Radio
 } from 'lucide-react';
 import { 
   Invoice, 
@@ -53,6 +55,7 @@ interface DashboardProps {
   onOpenCustomerEditor?: () => void;
   onSendInvoice?: (invoice: Invoice) => void;
   onOpenSecretProfit?: () => void;
+  onOpenCloudSync?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -72,6 +75,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onOpenExpenseEditor,
   onSendInvoice,
   onOpenSecretProfit,
+  onOpenCloudSync,
 }) => {
   const [isBulkReminderOpen, setIsBulkReminderOpen] = useState(false);
 
@@ -139,6 +143,80 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </button>
         </div>
       )}
+
+      {/* Quick Action Operations Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+            <Zap className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+            <span>Quick Operations:</span>
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Action 1: Standard Invoice */}
+          <button
+            type="button"
+            onClick={handleCreateInvoice}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>+ Create Invoice</span>
+          </button>
+
+          {/* Action 2: Exchange / Trade-in Old Customer Equipment */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenInvoiceEditor) {
+                onOpenInvoiceEditor({
+                  hasTradeIn: true,
+                  tradeInItems: [
+                    {
+                      id: `tradein-${Date.now()}`,
+                      description: '',
+                      brand: '',
+                      condition: 'USED_WORKING',
+                      quantity: 1,
+                      valuationPrice: 0,
+                    }
+                  ]
+                } as any);
+              } else if (handleCreateInvoice) {
+                handleCreateInvoice();
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+            title="Exchange customer old solar panels, inverters or batteries for new products with trade-in deduction"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5 text-emerald-600" />
+            <span>🔁 Exchange Old Material</span>
+          </button>
+
+          {/* Action 3: 1-Second Sync & Phone Pair */}
+          {onOpenCloudSync && (
+            <button
+              type="button"
+              onClick={onOpenCloudSync}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-50 hover:bg-cyan-100 text-cyan-950 border border-cyan-300 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+              title="Pair with Mobile Phone & sync laptop updates every second"
+            >
+              <Radio className="h-3.5 w-3.5 text-cyan-700 animate-pulse" />
+              <span>⚡ 1s Mobile Sync</span>
+            </button>
+          )}
+
+          {/* Action 4: Calculator / Estimator */}
+          <button
+            type="button"
+            onClick={handleOpenEstimator}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold transition-all cursor-pointer"
+          >
+            <Calculator className="h-3.5 w-3.5 text-slate-500" />
+            <span className="hidden sm:inline">Solar Estimator</span>
+          </button>
+        </div>
+      </div>
 
       {/* 4 Top KPI Stat Cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

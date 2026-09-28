@@ -14,7 +14,8 @@ import {
   BarChart3,
   ShieldCheck,
   UserCheck,
-  KeyRound
+  KeyRound,
+  Github
 } from 'lucide-react';
 import { TabType, UserRole, ShopSettings } from '../types/solar';
 import { SyncStatus } from '../services/cloudSync';
@@ -34,6 +35,7 @@ interface SidebarProps {
   onOpenBarcodeScanner?: (mode?: 'STOCK_IN' | 'STOCK_OUT' | 'LOG' | 'LABELS') => void;
   onOpenSecretProfit?: () => void;
   onOpenCloudSync?: () => void;
+  onOpenGitHub?: () => void;
   syncStatus?: SyncStatus;
 }
 
@@ -48,6 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenBarcodeScanner,
   onOpenSecretProfit,
   onOpenCloudSync,
+  onOpenGitHub,
   syncStatus = 'connected',
 }) => {
   const isPartner = currentRole === 'PARTNER';
@@ -346,6 +349,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className={`relative inline-flex rounded-full h-2 w-2 ${
                   syncStatus === 'live_1s' || syncStatus === 'connected' ? 'bg-emerald-400 ring-2 ring-emerald-300/40' : 'bg-amber-400'
                 }`} />
+              </span>
+            </button>
+          </div>
+        )}
+
+        {/* GitHub Deploy & Publish Launcher */}
+        {onOpenGitHub && (
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={onOpenGitHub}
+              className="w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-all cursor-pointer shadow-xs border bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+              title="Deploy to GitHub & Publish to GitHub Pages"
+            >
+              <div className="flex items-center gap-2">
+                <Github className="h-4 w-4 text-slate-300" />
+                <span>Deploy to GitHub</span>
+              </div>
+              <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-mono">
+                Pages
               </span>
             </button>
           </div>

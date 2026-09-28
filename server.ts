@@ -2,6 +2,10 @@ import express, { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execFile } from 'child_process';
+import util from 'util';
+
+const execFileAsync = util.promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -209,6 +213,165 @@ app.post('/api/sync/ping', (req: Request, res: Response) => {
   }, 'ping_notification');
 
   res.json({ success: true, timestamp: new Date().toISOString() });
+});
+
+// 7. GitHub Deployment & Status Endpoints
+app.get('/api/github/status', async (_req: Request, res: Response) => {
+  try {
+    const isGit = fs.existsSync(path.join(__dirname, '.git'));
+    if (!isGit) {
+      return res.json({ initialized: false });
+    }
+
+    let branch = 'main';
+    try {
+      const { stdout } = await execFileAsync('git', ['branch', '--show-current'], { cwd: __dirname });
+      branch = stdout.trim() || 'main';
+    } catch {
+      // ignore
+    }
+
+    let latestCommit: { hash: string; author: string; email: string; message: string; date: string } | null = null;
+    try {
+      const { stdout } = await execFileAsync('git', ['log', '-1', '--format=%H|%an|%ae|%s|%cd'], { cwd: __dirname });
+      const parts = stdout.trim().split('|');
+      if (parts.length >= 5) {
+        latestCommit = {
+          hash: parts[0],
+          author: parts[1],
+          email: parts[2],
+          message: parts[3],
+          date: parts[4],
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    let remoteOrigin: string | null = null;
+    try {
+      const { stdout } = await execFileAsync('git', ['remote', 'get-url', 'origin'], { cwd: __dirname });
+      // Sanitize any token from remote url before exposing
+      remoteOrigin = stdout.trim().replace(/\/\/[^@]+@/, '//***@');
+    } catch {
+      // No remote origin yet
+    }
+
+    let hasUncommittedChanges = false;
+    try {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain'], { cwd: __dirname });
+      hasUncommittedChanges = stdout.trim().length > 0;
+    } catch {
+      // ignore
+    }
+
+    res.json({
+      initialized: true,
+      branch,
+      latestCommit,
+      remoteOrigin,
+      hasUncommittedChanges,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to inspect git status' });
+  }
+});
+
+app.post('/api/github/publish', async (req: Request, res: Response) => {
+  try {
+    const { repoOwner, repoName, personalAccessToken, commitMessage } = req.body;
+
+    if (!repoOwner || !repoName) {
+      return res.status(400).json({ error: 'GitHub Username/Organization and Repository Name are required.' });
+    }
+
+    const cleanOwner = String(repoOwner).trim().replace(/[^a-zA-Z0-9-]/g, '');
+    const cleanRepo = String(repoName).trim().replace(/[^a-zA-Z0-9_.-]/g, '');
+
+    if (!cleanOwner || !cleanRepo) {
+      return res.status(400).json({ error: 'Invalid repository name or username format.' });
+    }
+
+    const token = personalAccessToken ? String(personalAccessToken).trim() : '';
+
+    // Stage changes and commit if needed
+    try {
+      await execFileAsync('git', ['add', '-A'], { cwd: __dirname });
+      const { stdout: statusOut } = await execFileAsync('git', ['status', '--porcelain'], { cwd: __dirname });
+      if (statusOut.trim().length > 0) {
+        const msg = (commitMessage && String(commitMessage).trim()) || `feat: update SolarCraft ERP (${new Date().toLocaleDateString()})`;
+        await execFileAsync('git', ['commit', '-m', msg], { cwd: __dirname });
+      }
+    } catch (commitErr: any) {
+      console.warn('Git commit note:', commitErr.message);
+    }
+
+    // Set remote origin URL
+    const authenticatedUrl = token
+      ? `https://${encodeURIComponent(cleanOwner)}:${encodeURIComponent(token)}@github.com/${cleanOwner}/${cleanRepo}.git`
+      : `https://github.com/${cleanOwner}/${cleanRepo}.git`;
+
+    try {
+      await execFileAsync('git', ['remote', 'remove', 'origin'], { cwd: __dirname });
+    } catch {
+      // origin might not exist yet
+    }
+
+    await execFileAsync('git', ['remote', 'add', 'origin', authenticatedUrl], { cwd: __dirname });
+
+    // Push to GitHub
+    try {
+      const { stdout, stderr } = await execFileAsync('git', ['push', '-u', 'origin', 'main', '--force'], { cwd: __dirname });
+      
+      const repoUrl = `https://github.com/${cleanOwner}/${cleanRepo}`;
+      const pagesUrl = `https://${cleanOwner.toLowerCase()}.github.io/${cleanRepo}/`;
+
+      // Get latest commit hash
+      const { stdout: logOut } = await execFileAsync('git', ['log', '-1', '--format=%H'], { cwd: __dirname });
+
+      res.json({
+        success: true,
+        repoUrl,
+        pagesUrl,
+        branch: 'main',
+        commitHash: logOut.trim(),
+        message: 'Successfully deployed and pushed to GitHub!',
+        output: (stdout + ' ' + stderr).replace(new RegExp(token, 'g'), '***'),
+      });
+    } catch (pushErr: any) {
+      const safeError = String(pushErr.stderr || pushErr.message || '').replace(new RegExp(token, 'g'), '***');
+      return res.status(400).json({
+        success: false,
+        error: 'Git Push Failed. Please ensure the repository exists on GitHub and your token has "repo" permissions.',
+        details: safeError,
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'An error occurred during GitHub deployment' });
+  }
+});
+
+app.get('/api/github/download-source', async (_req: Request, res: Response) => {
+  try {
+    const archivePath = path.join(__dirname, 'solarcraft-erp-source.tar.gz');
+    await execFileAsync('git', ['archive', '--format=tar.gz', '-o', archivePath, 'HEAD'], { cwd: __dirname });
+
+    res.download(archivePath, 'solarcraft-erp-latest.tar.gz', (err) => {
+      try {
+        if (fs.existsSync(archivePath)) {
+          fs.unlinkSync(archivePath);
+        }
+      } catch {
+        // ignore cleanup error
+      }
+      if (err) {
+        console.error('Download error:', err);
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to generate source download archive' });
+  }
 });
 
 // Mount Vite or Static Files

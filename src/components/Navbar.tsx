@@ -10,7 +10,8 @@ import {
   Cloud,
   Users,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Github
 } from 'lucide-react';
 import { ShopSettings, ProductItem, UserRole } from '../types/solar';
 import { SyncStatus } from '../services/cloudSync';
@@ -31,6 +32,7 @@ interface NavbarProps {
   onOpenBarcodeScanner?: (mode?: 'STOCK_IN' | 'STOCK_OUT' | 'LOG' | 'LABELS') => void;
   onOpenSecretProfit?: () => void;
   onOpenCloudSync?: () => void;
+  onOpenGitHub?: () => void;
   syncStatus?: SyncStatus;
   products?: ProductItem[];
 }
@@ -49,6 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenBarcodeScanner,
   onOpenSecretProfit,
   onOpenCloudSync,
+  onOpenGitHub,
   syncStatus = 'connected',
   setActiveTab,
   products = [],
@@ -210,6 +213,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="sm:hidden">
               {syncStatus === 'live_1s' || syncStatus === 'connected' ? '⚡ 1s' : 'Sync'}
             </span>
+          </button>
+        )}
+
+        {/* GitHub Deploy & Publish Modal Trigger */}
+        {onOpenGitHub && (
+          <button
+            type="button"
+            onClick={onOpenGitHub}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-all cursor-pointer shadow-2xs"
+            title="Deploy to GitHub & Publish to GitHub Pages"
+          >
+            <Github className="h-3.5 w-3.5 text-slate-900" />
+            <span className="hidden lg:inline">GitHub</span>
           </button>
         )}
 

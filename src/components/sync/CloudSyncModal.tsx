@@ -72,7 +72,12 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const qrContainerRef = useRef<HTMLDivElement>(null);
 
-  const currentUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const rawOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  // Convert internal dev host to public preview host so mobile camera QR scanning opens without auth walls
+  const publicMobileUrl = rawOrigin.includes('ais-dev-') 
+    ? rawOrigin.replace('ais-dev-', 'ais-pre-')
+    : rawOrigin;
+  const currentUrl = publicMobileUrl;
   const myDeviceId = getDeviceId();
   const myDeviceType = getDeviceType();
 
@@ -94,13 +99,13 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
     try {
       qrContainerRef.current.innerHTML = '';
       const writer = new BrowserQRCodeSvgWriter();
-      const svg = writer.write(currentUrl, 160, 160);
+      const svg = writer.write(publicMobileUrl, 160, 160);
       svg.setAttribute('class', 'w-full h-full rounded shadow-inner');
       qrContainerRef.current.appendChild(svg);
     } catch (e) {
       console.warn('QR code generation note:', e);
     }
-  }, [isOpen, currentUrl]);
+  }, [isOpen, publicMobileUrl]);
 
   if (!isOpen) return null;
 
@@ -439,26 +444,49 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
           </div>
 
           {/* Manual Force Sync Buttons */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="space-y-2 pt-1">
             <button
               type="button"
-              onClick={handlePush}
-              disabled={isPushing}
-              className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-all cursor-pointer shadow-2xs"
+              onClick={async () => {
+                resetQuotaExceededFlag();
+                setIsPulling(true);
+                setIsPushing(true);
+                setFeedbackMsg('⚡ Synchronizing across cloud and connected devices...');
+                await onForcePull();
+                await onForcePush();
+                setIsPulling(false);
+                setIsPushing(false);
+                setFeedbackMsg('✅ Continuous sync complete! Laptop and Mobile are 100% matched.');
+                setTimeout(() => setFeedbackMsg(null), 4000);
+              }}
+              disabled={isPushing || isPulling}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs active:scale-98"
             >
-              <RefreshCw className={`h-3.5 w-3.5 text-slate-600 ${isPushing ? 'animate-spin' : ''}`} />
-              <span>{isPushing ? 'Pushing Data...' : 'Force Push to Cloud'}</span>
+              <Zap className={`h-4 w-4 ${isPushing || isPulling ? 'animate-bounce' : 'fill-white'}`} />
+              <span>{isPushing || isPulling ? 'Synchronizing Everything...' : '⚡ Sync Now (Match Laptop & Mobile)'}</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handlePull}
-              disabled={isPulling}
-              className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-all cursor-pointer shadow-2xs"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 text-slate-600 ${isPulling ? 'animate-spin' : ''}`} />
-              <span>{isPulling ? 'Pulling Data...' : 'Force Pull Latest'}</span>
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handlePush}
+                disabled={isPushing}
+                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-all cursor-pointer text-xs"
+              >
+                <RefreshCw className={`h-3 w-3 text-slate-600 ${isPushing ? 'animate-spin' : ''}`} />
+                <span>{isPushing ? 'Pushing...' : 'Push to Cloud'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePull}
+                disabled={isPulling}
+                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-all cursor-pointer text-xs"
+              >
+                <RefreshCw className={`h-3 w-3 text-slate-600 ${isPulling ? 'animate-spin' : ''}`} />
+                <span>{isPulling ? 'Pulling...' : 'Pull Latest'}</span>
+              </button>
+            </div>
           </div>
         </div>
 

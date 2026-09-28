@@ -19,7 +19,8 @@ import {
   Plus,
   Trash2,
   Layers,
-  ShieldCheck
+  ShieldCheck,
+  Github
 } from 'lucide-react';
 import { ShopSettings, UserRole } from '../../types/solar';
 import { getAllCategories, DEFAULT_CATEGORY_LABELS } from '../../utils/categories';
@@ -31,6 +32,7 @@ interface SettingsViewProps {
   allAppData: any;
   onImportData: (data: any) => void;
   onOpenCloudSync?: () => void;
+  onOpenGitHub?: () => void;
   onSwitchRole?: (role: UserRole) => void;
 }
 
@@ -41,6 +43,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   allAppData,
   onImportData,
   onOpenCloudSync,
+  onOpenGitHub,
   onSwitchRole,
 }) => {
   const [formData, setFormData] = useState<ShopSettings>({ 
@@ -602,6 +605,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             >
               <Cloud className="h-3.5 w-3.5" />
               <span>Manage Cloud Sync & Mobile Link</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* GitHub Deployment & Automated Publishing */}
+      <div className="rounded-lg border border-slate-300 bg-slate-900 text-white p-3.5 space-y-3 shadow-xs">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+              <Github className="h-4 w-4 text-amber-400" />
+              <span>Deploy to GitHub & Automated Publishing</span>
+            </h3>
+            <p className="text-[11px] text-slate-400">
+              Host SolarCraft ERP on GitHub with pre-configured GitHub Actions CI/CD and free GitHub Pages web hosting.
+            </p>
+          </div>
+          <span className="rounded bg-slate-800 text-slate-300 text-[10px] font-bold px-2 py-0.5 border border-slate-700">
+            GitHub Pages Ready
+          </span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
+          <div className="text-xs text-slate-300 space-y-1">
+            <p className="font-semibold text-white">
+              Automated CI/CD Pipeline Configured
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Every push to branch <code className="bg-slate-800 px-1 py-0.5 rounded text-amber-300">main</code> triggers a build that automatically publishes your site online.
+            </p>
+          </div>
+
+          {onOpenGitHub && (
+            <button
+              type="button"
+              onClick={onOpenGitHub}
+              className="shrink-0 flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 px-3.5 py-2 text-xs font-bold text-slate-950 shadow-xs transition-colors cursor-pointer"
+            >
+              <Github className="h-3.5 w-3.5" />
+              <span>Deploy to GitHub Suite</span>
             </button>
           )}
         </div>

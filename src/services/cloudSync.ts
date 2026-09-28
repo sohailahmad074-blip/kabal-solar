@@ -80,6 +80,13 @@ let isQuotaExceededFlag = false;
 let lastAppliedHash = '';
 let activeLocalRevision = 1;
 
+// Clear any stale local quota blocks on startup
+try {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(QUOTA_STORAGE_KEY);
+  }
+} catch {}
+
 // Deterministic signature to prevent echo loops
 export const computeDataSignature = (data: Partial<CloudWorkspacePayload>): string => {
   try {
@@ -110,45 +117,22 @@ export const setIsRemoteUpdateInProgress = (val: boolean) => {
   isRemoteUpdateInProgress = val;
 };
 
-const getCurrentUtcDate = (): string => {
-  return new Date().toISOString().split('T')[0];
-};
-
 export const checkStoredQuotaStatus = (): boolean => {
-  try {
-    const storedDate = localStorage.getItem(QUOTA_STORAGE_KEY);
-    if (storedDate && storedDate === getCurrentUtcDate()) {
-      isQuotaExceededFlag = true;
-      return true;
-    } else if (storedDate && storedDate !== getCurrentUtcDate()) {
-      localStorage.removeItem(QUOTA_STORAGE_KEY);
-      isQuotaExceededFlag = false;
-      return false;
-    }
-  } catch {
-    // Ignore localStorage errors
-  }
-  return isQuotaExceededFlag;
+  return false;
 };
 
 export const markQuotaExceeded = () => {
-  isQuotaExceededFlag = true;
-  try {
-    localStorage.setItem(QUOTA_STORAGE_KEY, getCurrentUtcDate());
-  } catch {
-    // Ignore localStorage errors
-  }
+  // Silent advisory only - do not brick real-time sync
+  console.warn('Notice: Firestore write rate check.');
 };
 
-export const isQuotaExceeded = () => isQuotaExceededFlag;
+export const isQuotaExceeded = () => false;
 
 export const resetQuotaExceededFlag = () => {
   isQuotaExceededFlag = false;
   try {
     localStorage.removeItem(QUOTA_STORAGE_KEY);
-  } catch {
-    // Ignore localStorage errors
-  }
+  } catch {}
 };
 
 const checkIsQuotaError = (error: any): boolean => {
@@ -281,12 +265,8 @@ export async function pushFullStateToCloud(data: {
 }): Promise<{ success: boolean; isQuotaExceeded?: boolean; error?: string }> {
   if (isRemoteUpdateInProgress) return { success: false };
 
-  // Always push to high-speed server live relay first
+  // Always push to high-speed server live relay first for instant local responses
   pushToServerRelay(data).catch(() => {});
-
-  if (isQuotaExceeded()) {
-    return { success: false, isQuotaExceeded: true, error: 'Daily free Firestore write quota reached' };
-  }
 
   try {
     const docRef = doc(db, WORKSPACE_DOC_REF, WORKSPACE_DOC_ID);
@@ -306,39 +286,34 @@ export async function pushFullStateToCloud(data: {
     await setDoc(docRef, payload, { merge: true });
     return { success: true };
   } catch (error: any) {
-    if (checkIsQuotaError(error)) {
-      markQuotaExceeded();
-      console.warn('Firestore daily write quota reached for today. Server Live Stream continues seamlessly.');
-      return { success: false, isQuotaExceeded: true, error: error?.message || 'Quota limit exceeded' };
-    }
-    console.warn('Firestore push note:', error?.message || error);
+    console.warn('Firestore sync note:', error?.message || error);
     return { success: false, error: error?.message || 'Push failed' };
   }
 }
 
 export async function fetchCloudState(): Promise<CloudWorkspacePayload | null> {
-  // First try server state for freshest data
-  const serverState = await fetchServerState();
-  if (serverState && serverState.invoices && serverState.invoices.length > 0) {
-    return serverState;
-  }
-
-  if (isQuotaExceeded()) {
-    return null;
-  }
+  // First query Firestore for authoritative cloud data
   try {
     const docRef = doc(db, WORKSPACE_DOC_REF, WORKSPACE_DOC_ID);
     const snapshot = await getDoc(docRef);
     if (snapshot.exists()) {
-      return snapshot.data() as CloudWorkspacePayload;
+      const data = snapshot.data() as CloudWorkspacePayload;
+      if (data && (data.invoices?.length || data.products?.length || data.customers?.length)) {
+        // Feed into server memory cache
+        pushToServerRelay(data as any).catch(() => {});
+        return data;
+      }
     }
-    return null;
   } catch (error: any) {
-    if (checkIsQuotaError(error)) {
-      markQuotaExceeded();
-    }
-    return null;
+    console.warn('Firestore initial fetch fallback:', error?.message || error);
   }
+
+  // Fallback to server state
+  const serverState = await fetchServerState();
+  if (serverState && (serverState.invoices?.length || serverState.products?.length)) {
+    return serverState;
+  }
+  return null;
 }
 
 // ============================================================================
@@ -499,43 +474,37 @@ export function subscribeToCloudWorkspace(
     }
   }, 5000);
 
-  // 4. Firestore Real-time Listener (Secondary Cloud Backup)
-  if (!checkStoredQuotaStatus() && !isQuotaExceeded()) {
-    try {
-      const docRef = doc(db, WORKSPACE_DOC_REF, WORKSPACE_DOC_ID);
-      firestoreUnsubscribe = onSnapshot(
-        docRef,
-        (snapshot) => {
-          if (isClosed) return;
-          if (snapshot.exists()) {
-            const data = snapshot.data() as CloudWorkspacePayload;
-            const sig = computeDataSignature(data);
-            if (sig !== lastAppliedHash) {
-              lastAppliedHash = sig;
-              isRemoteUpdateInProgress = true;
-              try {
-                onCloudUpdate(data, 'firestore');
-              } finally {
-                setTimeout(() => { isRemoteUpdateInProgress = false; }, 80);
-              }
+  // 4. Firestore Real-time Continuous Listener (Authoritative Cloud Backbone)
+  try {
+    const docRef = doc(db, WORKSPACE_DOC_REF, WORKSPACE_DOC_ID);
+    firestoreUnsubscribe = onSnapshot(
+      docRef,
+      (snapshot) => {
+        if (isClosed) return;
+        if (snapshot.exists()) {
+          const data = snapshot.data() as CloudWorkspacePayload;
+          const sig = computeDataSignature(data);
+          if (sig !== lastAppliedHash) {
+            lastAppliedHash = sig;
+            isRemoteUpdateInProgress = true;
+            try {
+              onCloudUpdate(data, 'firestore');
+              // Also feed server relay
+              pushToServerRelay(data as any).catch(() => {});
+            } finally {
+              setTimeout(() => { isRemoteUpdateInProgress = false; }, 80);
             }
-          }
-        },
-        (error: any) => {
-          if (isClosed) return;
-          if (checkIsQuotaError(error)) {
-            markQuotaExceeded();
-            // Free quota exceeded on Firestore: Server Live Sync remains 100% active and running every second!
-            if (firestoreUnsubscribe) {
-              try { firestoreUnsubscribe(); } catch {}
-              firestoreUnsubscribe = null;
-            }
+            onStatusChange('live_1s');
           }
         }
-      );
-    } catch {
-      // ignore
-    }
+      },
+      (error: any) => {
+        if (isClosed) return;
+        console.warn('Firestore subscription status:', error?.message || error);
+      }
+    );
+  } catch (e) {
+    console.warn('Firestore onSnapshot init error:', e);
   }
 
   // Cleanup

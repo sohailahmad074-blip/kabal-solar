@@ -11,7 +11,8 @@ import {
   Eye,
   CheckCircle2,
   Send,
-  BarChart3
+  BarChart3,
+  ArrowRightLeft
 } from 'lucide-react';
 import { Invoice, ShopSettings } from '../../types/solar';
 import { Badge } from '../common/Badge';
@@ -91,6 +92,31 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
               <span>📊 Daily / Monthly Reports</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => {
+              handleEdit({
+                hasTradeIn: true,
+                tradeInItems: [
+                  {
+                    id: `tradein-${Date.now()}`,
+                    description: '',
+                    brand: '',
+                    condition: 'USED_WORKING',
+                    quantity: 1,
+                    valuationPrice: 0,
+                  }
+                ]
+              } as any);
+            }}
+            className="flex items-center gap-1.5 rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-900 shadow-xs hover:bg-emerald-100 transition-colors cursor-pointer"
+            title="Create an invoice exchanging old customer solar material for new equipment with trade-in deduction"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">+ Old Material Exchange</span>
+            <span className="sm:hidden">Exchange</span>
+          </button>
 
           <button
             type="button"

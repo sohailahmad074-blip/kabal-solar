@@ -58,6 +58,7 @@ import { SalesReportView } from './components/reports/SalesReportView';
 import { SettingsView } from './components/settings/SettingsView';
 import { SecretProfitWindow } from './components/profit/SecretProfitWindow';
 import { CloudSyncModal } from './components/sync/CloudSyncModal';
+import { GitHubPublishModal } from './components/sync/GitHubPublishModal';
 import { 
   pushFullStateToCloud, 
   pushToServerRelay,
@@ -175,6 +176,9 @@ export function App() {
 
   // Secret Owner Profit Vault Modal State
   const [isSecretProfitOpen, setIsSecretProfitOpen] = useState(false);
+
+  // GitHub Deploy & Publish Modal State
+  const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
 
   // Cloud Database & Multi-Device Real-Time Sync State
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
@@ -802,6 +806,7 @@ export function App() {
         onOpenBarcodeScanner={handleOpenBarcodeScanner}
         onOpenSecretProfit={() => setIsSecretProfitOpen(true)}
         onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+        onOpenGitHub={() => setIsGitHubModalOpen(true)}
         syncStatus={syncStatus}
       />
 
@@ -824,6 +829,7 @@ export function App() {
           onOpenBarcodeScanner={handleOpenBarcodeScanner}
           onOpenSecretProfit={() => setIsSecretProfitOpen(true)}
           onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+          onOpenGitHub={() => setIsGitHubModalOpen(true)}
           syncStatus={syncStatus}
           products={products}
         />
@@ -1081,6 +1087,7 @@ export function App() {
                   allAppData={allAppData}
                   onImportData={handleImportData}
                   onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+                  onOpenGitHub={() => setIsGitHubModalOpen(true)}
                   onSwitchRole={handleSelectRole}
                 />
               )}
@@ -1307,6 +1314,12 @@ export function App() {
           expenses: expenses.length,
           stockMovements: stockMovements.length,
         }}
+      />
+
+      {/* GitHub Repository Deploy & Publishing Suite */}
+      <GitHubPublishModal
+        isOpen={isGitHubModalOpen}
+        onClose={() => setIsGitHubModalOpen(false)}
       />
     </div>
   );
