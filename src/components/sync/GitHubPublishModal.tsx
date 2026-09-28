@@ -42,8 +42,8 @@ export const GitHubPublishModal: React.FC<GitHubPublishModalProps> = ({
   onClose,
 }) => {
   const [activeTab, setActiveTab] = useState<'DIRECT' | 'COMMANDS' | 'DOWNLOAD'>('DIRECT');
-  const [repoOwner, setRepoOwner] = useState('sohailahmad074');
-  const [repoName, setRepoName] = useState('solarcraft-erp');
+  const [repoOwner, setRepoOwner] = useState('sohailahmad074-blip');
+  const [repoName, setRepoName] = useState('kabal-solar');
   const [personalAccessToken, setPersonalAccessToken] = useState('');
   const [commitMessage, setCommitMessage] = useState('feat: update SolarCraft ERP latest release');
   const [showToken, setShowToken] = useState(false);
