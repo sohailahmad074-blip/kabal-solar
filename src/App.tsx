@@ -74,7 +74,8 @@ import {
   FIREBASE_CONSOLE_UPGRADE_URL,
   broadcastLocalState,
   computeDataSignature,
-  setLastAppliedHash
+  setLastAppliedHash,
+  mergeInvoicesWithLocal
 } from './services/cloudSync';
 
 export function App() {
@@ -202,7 +203,9 @@ export function App() {
         if (cloudData.settings) setSettings(cloudData.settings);
         if (cloudData.products) setProducts(cloudData.products);
         if (cloudData.customers) setCustomers(cloudData.customers);
-        if (cloudData.invoices) setInvoices(cloudData.invoices);
+        if (cloudData.invoices) {
+          setInvoices((prev) => mergeInvoicesWithLocal(prev, cloudData.invoices!));
+        }
         if (cloudData.purchaseOrders) setPurchaseOrders(cloudData.purchaseOrders);
         if (cloudData.expenses) setExpenses(cloudData.expenses);
         if (cloudData.suppliers) setSuppliers(cloudData.suppliers);
@@ -320,7 +323,9 @@ export function App() {
       if (cloudData.settings) setSettings(cloudData.settings);
       if (cloudData.products) setProducts(cloudData.products);
       if (cloudData.customers) setCustomers(cloudData.customers);
-      if (cloudData.invoices) setInvoices(cloudData.invoices);
+      if (cloudData.invoices) {
+        setInvoices((prev) => mergeInvoicesWithLocal(prev, cloudData.invoices!));
+      }
       if (cloudData.purchaseOrders) setPurchaseOrders(cloudData.purchaseOrders);
       if (cloudData.expenses) setExpenses(cloudData.expenses);
       if (cloudData.suppliers) setSuppliers(cloudData.suppliers);
@@ -428,8 +433,52 @@ export function App() {
     } else {
       updatedInvoices = [newInvoice, ...invoices];
     }
+
+    const updatedCustomers = customers.map((cust) => {
+      const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id);
+      const totalInvoiced = custInvoices.reduce((acc, i) => acc + (Number(i.grandTotal) || 0), 0);
+      const totalPaid = custInvoices.reduce((acc, i) => acc + (Number(i.paidAmount) || 0), 0);
+      const balanceDue = custInvoices.reduce((acc, i) => acc + (Number(i.balanceDue) || 0), 0);
+      return {
+        ...cust,
+        totalInvoiced,
+        totalPaid,
+        balanceDue,
+      };
+    });
+
+    saveInvoices(updatedInvoices);
+    saveCustomers(updatedCustomers);
     setInvoices(updatedInvoices);
-    refreshCustomerBalances(updatedInvoices);
+    setCustomers(updatedCustomers);
+
+    const payload = {
+      settings,
+      products,
+      customers: updatedCustomers,
+      invoices: updatedInvoices,
+      purchaseOrders,
+      expenses,
+      suppliers,
+      stockMovements,
+    };
+
+    const newSig = computeDataSignature(payload);
+    lastSyncedSignatureRef.current = newSig;
+    setLastAppliedHash(newSig);
+
+    broadcastLocalState(payload);
+    pushToServerRelay(payload).then((res) => {
+      if (res.success) {
+        setLastSyncTime(new Date());
+        setSyncStatus('live_1s');
+      }
+    }).catch(() => {});
+    pushFullStateToCloud(payload).then((res) => {
+      if (res.success) {
+        setLastSyncTime(new Date());
+      }
+    }).catch(() => {});
 
     // If print mode was open for this invoice, keep it updated
     if (printingInvoice?.id === newInvoice.id) {
@@ -442,9 +491,44 @@ export function App() {
   };
 
   const handleDeleteInvoice = (id: string) => {
-    const updated = invoices.filter((i) => i.id !== id);
-    setInvoices(updated);
-    refreshCustomerBalances(updated);
+    const updatedInvoices = invoices.filter((i) => i.id !== id);
+    const updatedCustomers = customers.map((cust) => {
+      const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id);
+      const totalInvoiced = custInvoices.reduce((acc, i) => acc + (Number(i.grandTotal) || 0), 0);
+      const totalPaid = custInvoices.reduce((acc, i) => acc + (Number(i.paidAmount) || 0), 0);
+      const balanceDue = custInvoices.reduce((acc, i) => acc + (Number(i.balanceDue) || 0), 0);
+      return {
+        ...cust,
+        totalInvoiced,
+        totalPaid,
+        balanceDue,
+      };
+    });
+
+    saveInvoices(updatedInvoices);
+    saveCustomers(updatedCustomers);
+    setInvoices(updatedInvoices);
+    setCustomers(updatedCustomers);
+
+    const payload = {
+      settings,
+      products,
+      customers: updatedCustomers,
+      invoices: updatedInvoices,
+      purchaseOrders,
+      expenses,
+      suppliers,
+      stockMovements,
+    };
+
+    const newSig = computeDataSignature(payload);
+    lastSyncedSignatureRef.current = newSig;
+    setLastAppliedHash(newSig);
+
+    broadcastLocalState(payload);
+    pushToServerRelay(payload).catch(() => {});
+    pushFullStateToCloud(payload).catch(() => {});
+
     if (printingInvoice?.id === id) {
       setPrintingInvoice(null);
     }
@@ -460,12 +544,12 @@ export function App() {
     const updatedInvoices = invoices.map((inv) => {
       if (inv.id !== invoiceId) return inv;
 
-      const newPaid = inv.paidAmount + amount;
-      const newBalance = Math.max(0, inv.grandTotal - newPaid);
+      const newPaid = Number((inv.paidAmount + amount).toFixed(2));
+      const newBalance = Math.max(0, Number((inv.grandTotal - newPaid).toFixed(2)));
       const newStatus = newBalance === 0 ? 'PAID' : 'PARTIAL';
 
       const newPayment = {
-        id: `pay-${Date.now()}`,
+        id: `pay-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         date: new Date().toISOString().split('T')[0],
         amount,
         method,
@@ -488,8 +572,55 @@ export function App() {
       return updated;
     });
 
+    // Immediately recalculate customer balance totals
+    const updatedCustomers = customers.map((cust) => {
+      const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id);
+      const totalInvoiced = custInvoices.reduce((acc, i) => acc + (Number(i.grandTotal) || 0), 0);
+      const totalPaid = custInvoices.reduce((acc, i) => acc + (Number(i.paidAmount) || 0), 0);
+      const balanceDue = custInvoices.reduce((acc, i) => acc + (Number(i.balanceDue) || 0), 0);
+      return {
+        ...cust,
+        totalInvoiced,
+        totalPaid,
+        balanceDue,
+      };
+    });
+
+    // Synchronous local persistence to prevent any loss
+    saveInvoices(updatedInvoices);
+    saveCustomers(updatedCustomers);
+
     setInvoices(updatedInvoices);
-    refreshCustomerBalances(updatedInvoices);
+    setCustomers(updatedCustomers);
+
+    // Immediate authoritative cloud & relay sync
+    const payload = {
+      settings,
+      products,
+      customers: updatedCustomers,
+      invoices: updatedInvoices,
+      purchaseOrders,
+      expenses,
+      suppliers,
+      stockMovements,
+    };
+
+    const newSig = computeDataSignature(payload);
+    lastSyncedSignatureRef.current = newSig;
+    setLastAppliedHash(newSig);
+
+    broadcastLocalState(payload);
+    pushToServerRelay(payload).then((res) => {
+      if (res.success) {
+        setLastSyncTime(new Date());
+        setSyncStatus('live_1s');
+      }
+    }).catch(() => {});
+    pushFullStateToCloud(payload).then((res) => {
+      if (res.success) {
+        setLastSyncTime(new Date());
+      }
+    }).catch(() => {});
   };
 
   // --- PURCHASING HANDLERS ---

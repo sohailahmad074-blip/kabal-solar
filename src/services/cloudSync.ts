@@ -91,18 +91,73 @@ try {
 export const computeDataSignature = (data: Partial<CloudWorkspacePayload>): string => {
   try {
     const invCount = data.invoices?.length || 0;
-    const invLastId = data.invoices?.[0]?.id || '';
-    const invGrandTotalSum = data.invoices?.reduce((sum, i) => sum + (i.grandTotal || 0), 0) || 0;
-    const prodCount = data.products?.length || 0;
+    const invGrandTotalSum = Math.round(data.invoices?.reduce((sum, i) => sum + (Number(i.grandTotal) || 0), 0) || 0);
+    const invPaidTotalSum = Math.round(data.invoices?.reduce((sum, i) => sum + (Number(i.paidAmount) || 0), 0) || 0);
+    const invBalanceDueSum = Math.round(data.invoices?.reduce((sum, i) => sum + (Number(i.balanceDue) || 0), 0) || 0);
+    const invPaymentsCount = data.invoices?.reduce((sum, i) => sum + (i.payments?.length || 0), 0) || 0;
+    const invLastUpdated = data.invoices?.[0]?.updatedAt || data.invoices?.[0]?.id || '';
+
     const custCount = data.customers?.length || 0;
+    const custPaidSum = Math.round(data.customers?.reduce((sum, c) => sum + (Number(c.totalPaid) || 0), 0) || 0);
+    const custBalanceSum = Math.round(data.customers?.reduce((sum, c) => sum + (Number(c.balanceDue) || 0), 0) || 0);
+
+    const prodCount = data.products?.length || 0;
+    const prodStockSum = Math.round(data.products?.reduce((sum, p) => sum + (Number(p.stockQty) || 0), 0) || 0);
+
     const expCount = data.expenses?.length || 0;
+    const expTotalSum = Math.round(data.expenses?.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) || 0);
+
     const poCount = data.purchaseOrders?.length || 0;
+    const poTotalSum = Math.round(data.purchaseOrders?.reduce((sum, po) => sum + (Number(po.grandTotal) || 0), 0) || 0);
+    const poReceivedCount = data.purchaseOrders?.filter(po => po.status === 'RECEIVED').length || 0;
+
+    const supCount = data.suppliers?.length || 0;
+    const supBalanceSum = Math.round(data.suppliers?.reduce((sum, s) => sum + (Number(s.totalOutstanding) || 0), 0) || 0);
+
     const movCount = data.stockMovements?.length || 0;
+    const movFirstId = data.stockMovements?.[0]?.id || '';
+
     const settingsName = data.settings?.shopName || '';
-    return `${invCount}_${invLastId}_${invGrandTotalSum}_${prodCount}_${custCount}_${expCount}_${poCount}_${movCount}_${settingsName}`;
+    const settingsPhone = data.settings?.phone || '';
+
+    return `inv:${invCount}_${invGrandTotalSum}_${invPaidTotalSum}_${invBalanceDueSum}_${invPaymentsCount}_${invLastUpdated}|cust:${custCount}_${custPaidSum}_${custBalanceSum}|prod:${prodCount}_${prodStockSum}|exp:${expCount}_${expTotalSum}|po:${poCount}_${poTotalSum}_${poReceivedCount}|sup:${supCount}_${supBalanceSum}|mov:${movCount}_${movFirstId}|set:${settingsName}_${settingsPhone}`;
   } catch {
     return String(Date.now());
   }
+};
+
+/**
+ * Intelligent Conflict-Free Merge for Invoices:
+ * Prevents remote sync from wiping out newer local invoice payments or status updates.
+ */
+export const mergeInvoicesWithLocal = (localInvs: Invoice[], remoteInvs: Invoice[]): Invoice[] => {
+  if (!remoteInvs || remoteInvs.length === 0) return localInvs;
+  if (!localInvs || localInvs.length === 0) return remoteInvs;
+
+  const invoiceMap = new Map<string, Invoice>();
+  for (const inv of remoteInvs) {
+    invoiceMap.set(inv.id, inv);
+  }
+
+  for (const localInv of localInvs) {
+    const remoteInv = invoiceMap.get(localInv.id);
+    if (!remoteInv) {
+      // Local invoice not yet in remote, keep local
+      invoiceMap.set(localInv.id, localInv);
+    } else {
+      const localUpdated = new Date(localInv.updatedAt || localInv.createdAt || 0).getTime();
+      const remoteUpdated = new Date(remoteInv.updatedAt || remoteInv.createdAt || 0).getTime();
+      const localPaymentsCount = localInv.payments?.length || 0;
+      const remotePaymentsCount = remoteInv.payments?.length || 0;
+
+      // If local has more recorded payments or a newer update timestamp, preserve local
+      if (localPaymentsCount > remotePaymentsCount || localUpdated > remoteUpdated) {
+        invoiceMap.set(localInv.id, localInv);
+      }
+    }
+  }
+
+  return Array.from(invoiceMap.values());
 };
 
 export const setLastAppliedHash = (hash: string) => {
@@ -263,8 +318,6 @@ export async function pushFullStateToCloud(data: {
   suppliers: Supplier[];
   stockMovements: StockMovement[];
 }): Promise<{ success: boolean; isQuotaExceeded?: boolean; error?: string }> {
-  if (isRemoteUpdateInProgress) return { success: false };
-
   // Always push to high-speed server live relay first for instant local responses
   pushToServerRelay(data).catch(() => {});
 
