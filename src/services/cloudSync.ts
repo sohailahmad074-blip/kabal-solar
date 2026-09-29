@@ -95,7 +95,19 @@ export const computeDataSignature = (data: Partial<CloudWorkspacePayload>): stri
     const invPaidTotalSum = Math.round(data.invoices?.reduce((sum, i) => sum + (Number(i.paidAmount) || 0), 0) || 0);
     const invBalanceDueSum = Math.round(data.invoices?.reduce((sum, i) => sum + (Number(i.balanceDue) || 0), 0) || 0);
     const invPaymentsCount = data.invoices?.reduce((sum, i) => sum + (i.payments?.length || 0), 0) || 0;
-    const invLastUpdated = data.invoices?.[0]?.updatedAt || data.invoices?.[0]?.id || '';
+    
+    // Explicitly track invoice line items count and items signature (accessories, equipment)
+    const invTotalItemsCount = data.invoices?.reduce((sum, i) => sum + (i.items?.length || 0), 0) || 0;
+    const invItemsSummaryHash = data.invoices?.reduce((acc, i) => {
+      const itemsHash = (i.items || []).map(it => `${it.id}:${(it.description || '').substring(0, 8)}:${it.quantity}:${it.unitPrice}:${it.total}`).join(',');
+      return acc + (itemsHash.length % 997);
+    }, 0) || 0;
+
+    // Aggregate timestamp hash across all invoices so editing ANY invoice triggers sync
+    const invAllUpdatedHash = data.invoices?.reduce((sum, i) => {
+      const ts = new Date(i.updatedAt || i.createdAt || 0).getTime();
+      return sum + (ts % 1000000);
+    }, 0) || 0;
 
     const custCount = data.customers?.length || 0;
     const custPaidSum = Math.round(data.customers?.reduce((sum, c) => sum + (Number(c.totalPaid) || 0), 0) || 0);
@@ -120,7 +132,7 @@ export const computeDataSignature = (data: Partial<CloudWorkspacePayload>): stri
     const settingsName = data.settings?.shopName || '';
     const settingsPhone = data.settings?.phone || '';
 
-    return `inv:${invCount}_${invGrandTotalSum}_${invPaidTotalSum}_${invBalanceDueSum}_${invPaymentsCount}_${invLastUpdated}|cust:${custCount}_${custPaidSum}_${custBalanceSum}|prod:${prodCount}_${prodStockSum}|exp:${expCount}_${expTotalSum}|po:${poCount}_${poTotalSum}_${poReceivedCount}|sup:${supCount}_${supBalanceSum}|mov:${movCount}_${movFirstId}|set:${settingsName}_${settingsPhone}`;
+    return `inv:${invCount}_${invGrandTotalSum}_${invPaidTotalSum}_${invBalanceDueSum}_${invPaymentsCount}_${invTotalItemsCount}_${invItemsSummaryHash}_${invAllUpdatedHash}|cust:${custCount}_${custPaidSum}_${custBalanceSum}|prod:${prodCount}_${prodStockSum}|exp:${expCount}_${expTotalSum}|po:${poCount}_${poTotalSum}_${poReceivedCount}|sup:${supCount}_${supBalanceSum}|mov:${movCount}_${movFirstId}|set:${settingsName}_${settingsPhone}`;
   } catch {
     return String(Date.now());
   }
@@ -128,7 +140,7 @@ export const computeDataSignature = (data: Partial<CloudWorkspacePayload>): stri
 
 /**
  * Intelligent Conflict-Free Merge for Invoices:
- * Prevents remote sync from wiping out newer local invoice payments or status updates.
+ * Prevents remote sync from wiping out newer local invoice items, accessories, or payments.
  */
 export const mergeInvoicesWithLocal = (localInvs: Invoice[], remoteInvs: Invoice[]): Invoice[] => {
   if (!remoteInvs || remoteInvs.length === 0) return localInvs;
@@ -149,9 +161,16 @@ export const mergeInvoicesWithLocal = (localInvs: Invoice[], remoteInvs: Invoice
       const remoteUpdated = new Date(remoteInv.updatedAt || remoteInv.createdAt || 0).getTime();
       const localPaymentsCount = localInv.payments?.length || 0;
       const remotePaymentsCount = remoteInv.payments?.length || 0;
+      const localItemsCount = localInv.items?.length || 0;
+      const remoteItemsCount = remoteInv.items?.length || 0;
 
-      // If local has more recorded payments or a newer update timestamp, preserve local
-      if (localPaymentsCount > remotePaymentsCount || localUpdated > remoteUpdated) {
+      // Never downgrade an invoice if local has more items (e.g. accessories added),
+      // more payments recorded, or a newer/equal update timestamp
+      if (
+        localItemsCount > remoteItemsCount ||
+        localPaymentsCount > remotePaymentsCount ||
+        localUpdated >= remoteUpdated
+      ) {
         invoiceMap.set(localInv.id, localInv);
       }
     }
@@ -323,20 +342,24 @@ export async function pushFullStateToCloud(data: {
 
   try {
     const docRef = doc(db, WORKSPACE_DOC_REF, WORKSPACE_DOC_ID);
-    const payload: CloudWorkspacePayload = {
-      version: 2,
-      updatedAt: new Date().toISOString(),
-      updatedByDevice: `${getDeviceId()} (${getDeviceName()})`,
-      settings: data.settings,
-      products: data.products,
-      customers: data.customers,
-      invoices: data.invoices,
-      purchaseOrders: data.purchaseOrders,
-      expenses: data.expenses,
-      suppliers: data.suppliers,
-      stockMovements: data.stockMovements,
-    };
-    await setDoc(docRef, payload, { merge: true });
+    // Sanitize data by converting to clean JSON so undefined fields (e.g. optional item properties)
+    // are stripped out, preventing Firestore "Unsupported field value: undefined" errors
+    const sanitizedPayload: CloudWorkspacePayload = JSON.parse(
+      JSON.stringify({
+        version: 2,
+        updatedAt: new Date().toISOString(),
+        updatedByDevice: `${getDeviceId()} (${getDeviceName()})`,
+        settings: data.settings,
+        products: data.products,
+        customers: data.customers,
+        invoices: data.invoices,
+        purchaseOrders: data.purchaseOrders,
+        expenses: data.expenses,
+        suppliers: data.suppliers,
+        stockMovements: data.stockMovements,
+      })
+    );
+    await setDoc(docRef, sanitizedPayload, { merge: true });
     return { success: true };
   } catch (error: any) {
     console.warn('Firestore sync note:', error?.message || error);

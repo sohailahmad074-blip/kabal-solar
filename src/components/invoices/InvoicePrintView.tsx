@@ -38,6 +38,44 @@ export const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({
 }) => {
   const printContainerRef = useRef<HTMLDivElement>(null);
   const [showSystemSpecs, setShowSystemSpecs] = useState<boolean>(false);
+  const [accessoriesMode, setAccessoriesMode] = useState<'ITEMIZED' | 'LUMP_SUM'>(
+    invoice.accessoriesMode || 'ITEMIZED'
+  );
+
+  const accessoryItems = invoice.items.filter(
+    (i) => i.category === 'ACCESSORIES' || i.description.toLowerCase().includes('accessories') || i.description.toLowerCase().includes('balance of system') || i.description.toLowerCase().includes('bos')
+  );
+
+  const displayItems = React.useMemo(() => {
+    // If not in LUMP_SUM mode or there are <= 1 accessory items, show list as-is
+    if (accessoriesMode !== 'LUMP_SUM' || accessoryItems.length <= 1) {
+      return invoice.items;
+    }
+
+    const nonAccessoryItems = invoice.items.filter(
+      (i) => !accessoryItems.includes(i)
+    );
+
+    const lumpSumTotal = accessoryItems.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
+    const includedPartsList = accessoryItems.map(it => it.description).filter(Boolean).join(', ');
+
+    const consolidatedLumpSumItem = {
+      id: 'lump-sum-accessories-pkg',
+      description: 'Complete Solar Installation Accessories & Balance of System (BOS) Package',
+      category: 'ACCESSORIES' as const,
+      quantity: 1,
+      unit: 'Package',
+      unitPrice: lumpSumTotal,
+      discountPercent: 0,
+      total: lumpSumTotal,
+      specs: includedPartsList 
+        ? `Includes turnkey installation hardware (${includedPartsList.length > 100 ? includedPartsList.substring(0, 97) + '...' : includedPartsList})` 
+        : 'Turnkey Cabling, Breakers, SPDs, Connectors & Mounting Hardware',
+      warrantyPeriod: accessoryItems.find(a => a.warrantyPeriod)?.warrantyPeriod || '1-Year Standard BoS Warranty',
+    };
+
+    return [...nonAccessoryItems, consolidatedLumpSumItem];
+  }, [invoice.items, accessoriesMode, accessoryItems]);
 
   const handlePrint = () => {
     window.print();
@@ -104,6 +142,36 @@ export const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({
               <CreditCard className="h-3.5 w-3.5" />
               <span>Record Payment</span>
             </button>
+          )}
+
+          {/* Dual Accessories Mode Toggle: Customer Lump Sum vs Installer Itemized */}
+          {accessoryItems.length > 0 && (
+            <div className="flex items-center rounded border border-slate-300 bg-slate-100 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setAccessoriesMode('LUMP_SUM')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded font-bold transition-all cursor-pointer ${
+                  accessoriesMode === 'LUMP_SUM'
+                    ? 'bg-amber-400 text-slate-950 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Customer Copy: Consolidates accessories into a single lump sum package"
+              >
+                <span>Customer (Lump Sum)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccessoriesMode('ITEMIZED')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded font-bold transition-all cursor-pointer ${
+                  accessoriesMode === 'ITEMIZED'
+                    ? 'bg-slate-800 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Installer Copy: Shows complete itemized accessories breakdown"
+              >
+                <span>Installer (Itemized)</span>
+              </button>
+            </div>
           )}
 
           {/* Toggle System Profile on Invoice */}
@@ -251,12 +319,25 @@ export const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({
 
         {/* Line Items Table */}
         <div className="py-4 overflow-x-auto">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-              New Equipment & Materials Supplied
-            </h3>
+          <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                New Equipment & Materials Supplied
+              </h3>
+              {accessoryItems.length > 0 && (
+                accessoriesMode === 'LUMP_SUM' ? (
+                  <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded print:border-slate-300 print:text-slate-800 print:bg-slate-100">
+                    Customer Copy: Lump Sum Accessories Package
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-slate-800 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded">
+                    Installer Copy: Itemized Accessories Breakdown
+                  </span>
+                )
+              )}
+            </div>
             <span className="text-[10px] text-slate-500 font-medium">
-              {invoice.items.length} {invoice.items.length === 1 ? 'Item' : 'Items'}
+              {displayItems.length} {displayItems.length === 1 ? 'Line Item' : 'Line Items'}
             </span>
           </div>
           <table className="w-full text-left text-xs border-collapse">
@@ -270,11 +351,22 @@ export const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {invoice.items.map((item, index) => (
+              {displayItems.map((item, index) => (
                 <tr key={item.id || index} className="align-top">
                   <td className="py-2 px-2 font-semibold text-slate-500">{index + 1}</td>
                   <td className="py-2 px-2">
-                    <p className="font-bold text-slate-900">{item.description}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-bold text-slate-900">{item.description}</p>
+                      {item.id === 'lump-sum-accessories-pkg' ? (
+                        <span className="text-[9px] font-bold text-amber-900 bg-amber-200/90 border border-amber-400 px-1.5 py-0.2 rounded print:border-slate-400 print:text-slate-900 print:bg-slate-200">
+                          Consolidated Package
+                        </span>
+                      ) : item.category === 'ACCESSORIES' ? (
+                        <span className="text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.2 rounded print:border-slate-400 print:text-slate-800 print:bg-slate-100">
+                          Accessory
+                        </span>
+                      ) : null}
+                    </div>
                     {item.specs && <p className="text-[11px] text-slate-600">{item.specs}</p>}
                     {item.serialNumbers && (
                       <p className="text-[10px] font-mono text-slate-500 mt-0.5">

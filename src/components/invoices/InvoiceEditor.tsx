@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -12,7 +12,9 @@ import {
   CheckCircle2,
   MessageSquare,
   RefreshCw,
-  ArrowLeftRight
+  ArrowLeftRight,
+  PackagePlus,
+  ShieldCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -24,12 +26,14 @@ import {
   ShopSettings, 
   InvoiceType, 
   PaymentStatus, 
-  PaymentMethod
+  PaymentMethod,
+  ProductCategory
 } from '../../types/solar';
 import { Modal } from '../common/Modal';
 import { formatCurrency } from '../../utils/formatters';
 import { playScannerSuccessBeep, playScannerErrorBeep } from '../../utils/barcodeSound';
 import { buildWhatsAppMessage, openWhatsApp } from '../../utils/sendDirect';
+import { getAllCategories } from '../../utils/categories';
 
 interface InvoiceEditorProps {
   isOpen: boolean;
@@ -86,6 +90,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [termsAndConditions, setTermsAndConditions] = useState(settings.termsAndConditions);
   const [warrantyNotes, setWarrantyNotes] = useState(settings.warrantyDisclaimer);
   const [notes, setNotes] = useState('');
+  const [accessoriesMode, setAccessoriesMode] = useState<'ITEMIZED' | 'LUMP_SUM'>('ITEMIZED');
   const [submitAction, setSubmitAction] = useState<'SAVE' | 'SEND' | 'WHATSAPP'>('SAVE');
   const [barcodeScanInput, setBarcodeScanInput] = useState('');
   const [scanMessage, setScanMessage] = useState<string | null>(null);
@@ -186,8 +191,31 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     return () => window.removeEventListener('keydown', handleHardwareScan);
   }, [isOpen, products, items, settings]);
 
+  // Track open state and active invoice id so we ONLY reset when opening a new/different invoice
+  const prevIsOpenRef = useRef(false);
+  const activeInvoiceIdRef = useRef<string | null>(null);
+
   // Initialize or reset form
   useEffect(() => {
+    const isOpening = isOpen && !prevIsOpenRef.current;
+    const isDifferentInvoice = isOpen && existingInvoice && existingInvoice.id !== activeInvoiceIdRef.current;
+    const isSwitchingToNew = isOpen && !existingInvoice && activeInvoiceIdRef.current !== null && activeInvoiceIdRef.current !== 'NEW_DRAFT';
+
+    prevIsOpenRef.current = isOpen;
+
+    if (!isOpen) {
+      activeInvoiceIdRef.current = null;
+      return;
+    }
+
+    if (!isOpening && !isDifferentInvoice && !isSwitchingToNew) {
+      // Modal is actively open and being edited.
+      // Prevent resetting the user's added items/accessories when background sync or settings change!
+      return;
+    }
+
+    activeInvoiceIdRef.current = existingInvoice?.id || 'NEW_DRAFT';
+
     if (existingInvoice) {
       setDocType(existingInvoice.type);
       setInvoiceNumber(existingInvoice.invoiceNumber);
@@ -204,7 +232,19 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
       setDate(existingInvoice.date);
       setDueDate(existingInvoice.dueDate || existingInvoice.date);
-      setItems(existingInvoice.items.length > 0 ? existingInvoice.items : [createEmptyItem()]);
+      setItems(
+        existingInvoice.items && existingInvoice.items.length > 0
+          ? existingInvoice.items.map((it) => ({
+              ...it,
+              productId: it.productId || '',
+              category: it.category || 'SOLAR_PANELS',
+              brand: it.brand || '',
+              specs: it.specs || '',
+              serialNumbers: it.serialNumbers || '',
+              warrantyPeriod: it.warrantyPeriod || '',
+            }))
+          : [createEmptyItem()]
+      );
       setHasTradeIn(Boolean(existingInvoice.hasTradeIn || (existingInvoice.tradeInItems && existingInvoice.tradeInItems.length > 0)));
       setTradeInItems(
         existingInvoice.tradeInItems && existingInvoice.tradeInItems.length > 0
@@ -218,6 +258,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       setTermsAndConditions(existingInvoice.termsAndConditions || settings.termsAndConditions);
       setWarrantyNotes(existingInvoice.warrantyNotes || settings.warrantyDisclaimer);
       setNotes(existingInvoice.notes || '');
+      setAccessoriesMode(existingInvoice.accessoriesMode || 'ITEMIZED');
     } else {
       // Create new draft
       const prefix = docType === 'QUOTATION' ? settings.quotationPrefix : settings.invoicePrefix;
@@ -236,6 +277,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       
       // Default initial solar panel item
       setItems([createEmptyItem()]);
+      setAccessoriesMode('ITEMIZED');
       setHasTradeIn(false);
       setTradeInItems([createEmptyTradeInItem()]);
       setTaxPercent(0);
@@ -247,7 +289,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       setWarrantyNotes(settings.warrantyDisclaimer);
       setNotes('');
     }
-  }, [existingInvoice, isOpen, settings]);
+  }, [existingInvoice, isOpen]);
 
   function createEmptyTradeInItem(): InvoiceTradeInItem {
     return {
@@ -263,18 +305,22 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     };
   }
 
-  function createEmptyItem(): InvoiceItem {
+  function createEmptyItem(category: ProductCategory = 'SOLAR_PANELS', desc = '', unit = 'Pcs'): InvoiceItem {
     return {
       id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      description: '',
+      productId: '',
+      description: desc,
       quantity: 1,
-      unit: 'Pcs',
+      unit: unit,
       unitPrice: 0,
       costPrice: 0,
       discountPercent: 0,
       total: 0,
-      category: 'SOLAR_PANELS',
-      warrantyPeriod: '12-Year Product / 25-Year Performance',
+      category: category,
+      brand: '',
+      specs: '',
+      serialNumbers: '',
+      warrantyPeriod: category === 'ACCESSORIES' ? '1-Year Standard Warranty' : '12-Year Product / 25-Year Performance',
     };
   }
 
@@ -320,9 +366,47 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
     }
   };
 
-  // Add Item
-  const handleAddItem = () => {
-    setItems([...items, createEmptyItem()]);
+  // Add Equipment Item
+  const handleAddItem = (category: ProductCategory = 'SOLAR_PANELS', desc = '', unit = 'Pcs') => {
+    setItems([...items, createEmptyItem(category, desc, unit)]);
+  };
+
+  // Option 1: Add Individual Accessory (Itemized for Installer)
+  const handleAddInstallerAccessory = () => {
+    setItems([
+      ...items,
+      createEmptyItem('ACCESSORIES', '', 'Pcs'),
+    ]);
+  };
+  const handleAddAccessory = handleAddInstallerAccessory;
+
+  // Option 2: Add Lump Sum Accessories Package (Consolidated for Customer)
+  const handleAddLumpSumAccessories = () => {
+    setAccessoriesMode('LUMP_SUM');
+    const existingLumpSum = items.find(
+      (it) => it.category === 'ACCESSORIES' && (it.unit === 'Package' || it.description.toLowerCase().includes('lump sum') || it.description.toLowerCase().includes('package'))
+    );
+    if (existingLumpSum) {
+      alert('A lump-sum accessories package line already exists in this invoice.');
+      return;
+    }
+    const newLumpSumItem: InvoiceItem = {
+      id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      productId: '',
+      description: 'Complete Solar Installation Accessories & Balance of System (BOS) Package (Cables, Breakers, SPDs, Connectors & Clamps)',
+      category: 'ACCESSORIES',
+      quantity: 1,
+      unit: 'Package',
+      unitPrice: 0,
+      costPrice: 0,
+      discountPercent: 0,
+      total: 0,
+      brand: 'Standard Solar BoS',
+      specs: 'Complete DC/AC Cabling, Breaker Protection & Mounting Hardware Package',
+      serialNumbers: '',
+      warrantyPeriod: '1-Year Standard Installation Warranty',
+    };
+    setItems([...items, newLumpSumItem]);
   };
 
   // Select Product from Catalog
@@ -438,6 +522,24 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       ? tradeInItems.filter((t) => t.description.trim() || Number(t.valuationPrice) > 0)
       : [];
 
+    // Sanitize line items to ensure all fields are defined strings/numbers (no undefined values)
+    const sanitizedItems: InvoiceItem[] = items.map((itm) => ({
+      id: itm.id || `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      productId: itm.productId || '',
+      description: itm.description.trim(),
+      category: itm.category || 'SOLAR_PANELS',
+      brand: itm.brand || '',
+      specs: itm.specs || '',
+      serialNumbers: itm.serialNumbers || '',
+      warrantyPeriod: itm.warrantyPeriod || '',
+      quantity: Number(itm.quantity) || 1,
+      unit: itm.unit || 'Pcs',
+      unitPrice: Number(itm.unitPrice) || 0,
+      costPrice: Number(itm.costPrice) || 0,
+      discountPercent: Number(itm.discountPercent) || 0,
+      total: Number(itm.total) || 0,
+    }));
+
     const newInvoice: Invoice = {
       id: existingInvoice?.id || `inv-${Date.now()}`,
       invoiceNumber,
@@ -455,7 +557,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       systemType,
       installationAddress: installationAddress || customerAddress,
 
-      items,
+      items: sanitizedItems,
       hasTradeIn: hasTradeIn && validTradeInItems.length > 0,
       tradeInItems: validTradeInItems,
       tradeInTotal,
@@ -471,6 +573,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       balanceDue,
       status,
       payments: paymentsLog,
+      accessoriesMode,
       termsAndConditions,
       warrantyNotes,
       notes,
@@ -772,11 +875,69 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
               <button
                 type="button"
-                onClick={handleAddItem}
+                onClick={() => handleAddItem('SOLAR_PANELS')}
                 className="flex items-center gap-1 rounded bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 <Plus className="h-3 w-3" />
-                <span>Add Line</span>
+                <span>+ Equipment</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAddInstallerAccessory}
+                className="flex items-center gap-1 rounded bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-800 border border-slate-300 hover:bg-slate-200 transition-colors cursor-pointer"
+                title="Option 1: Add individual itemized accessories for installer team"
+              >
+                <Plus className="h-3 w-3 text-slate-600" />
+                <span>+ Installer Accessory (Itemized)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAddLumpSumAccessories}
+                className="flex items-center gap-1 rounded bg-amber-400 px-2.5 py-1 text-xs font-bold text-slate-950 hover:bg-amber-500 transition-colors cursor-pointer shadow-2xs"
+                title="Option 2: Add consolidated lump sum accessories package for customer"
+              >
+                <PackagePlus className="h-3.5 w-3.5 text-slate-900" />
+                <span>+ Customer Accessories (Lump Sum)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Dual Accessories Option Bar */}
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between px-3 py-2 rounded-md bg-amber-50/70 border border-amber-200/80 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-amber-950">Accessories Print Presentation:</span>
+              <span className="text-[10px] text-amber-800">
+                {accessoriesMode === 'LUMP_SUM' 
+                  ? 'Showing consolidated lump sum package to customer' 
+                  : 'Showing detailed itemized breakdown for installer'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 bg-white p-0.5 rounded border border-amber-300 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setAccessoriesMode('LUMP_SUM')}
+                className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
+                  accessoriesMode === 'LUMP_SUM'
+                    ? 'bg-amber-400 text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Customer copy: Consolidates accessories into a single lump-sum package line"
+              >
+                2) Lump Sum for Customer
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccessoriesMode('ITEMIZED')}
+                className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
+                  accessoriesMode === 'ITEMIZED'
+                    ? 'bg-slate-800 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Installer copy: Shows every accessory itemized with individual counts and prices"
+              >
+                1) Itemized for Installer
               </button>
             </div>
           </div>
@@ -897,23 +1058,45 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                   </div>
                 </div>
 
-                {/* Sub-row for Serial Numbers & Warranty Note */}
-                <div className="grid grid-cols-1 gap-2 pt-1.5 border-t border-slate-100 sm:grid-cols-2">
+                {/* Sub-row for Category, Serial Numbers & Warranty Note */}
+                <div className="grid grid-cols-1 gap-2 pt-1.5 border-t border-slate-100 sm:grid-cols-3">
                   <div>
+                    <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">
+                      Category
+                    </label>
+                    <select
+                      value={item.category || 'ACCESSORIES'}
+                      onChange={(e) => handleItemChange(index, 'category', e.target.value)}
+                      className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700 focus:border-amber-500 focus:outline-none"
+                    >
+                      {getAllCategories(settings).map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">
+                      Serial Numbers (Optional)
+                    </label>
                     <input
                       type="text"
                       value={item.serialNumbers || ''}
                       onChange={(e) => handleItemChange(index, 'serialNumbers', e.target.value)}
-                      placeholder="Serial Numbers (e.g. SN-9988102, SN-9988103)"
+                      placeholder="e.g. SN-9988102, SN-9988103"
                       className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-700 placeholder-slate-400 focus:border-slate-400 focus:outline-none"
                     />
                   </div>
                   <div>
+                    <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">
+                      Warranty
+                    </label>
                     <input
                       type="text"
                       value={item.warrantyPeriod || ''}
                       onChange={(e) => handleItemChange(index, 'warrantyPeriod', e.target.value)}
-                      placeholder="Warranty (e.g. 25-Year Performance / 5-Year Inverter)"
+                      placeholder="e.g. 1-Year / 25-Year Performance"
                       className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-700 placeholder-slate-400 focus:border-slate-400 focus:outline-none"
                     />
                   </div>

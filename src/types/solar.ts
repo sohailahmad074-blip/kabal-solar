@@ -128,6 +128,9 @@ export interface Invoice {
   dueDate: string;
   items: InvoiceItem[];
   
+  // Accessories Presentation: 'ITEMIZED' (full breakdown for installer) or 'LUMP_SUM' (single package for customer)
+  accessoriesMode?: 'ITEMIZED' | 'LUMP_SUM';
+  
   // Equipment Exchange / Trade-In Buyback
   hasTradeIn?: boolean;
   tradeInItems?: InvoiceTradeInItem[];
