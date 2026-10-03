@@ -64,6 +64,7 @@ export interface StockMovement {
   unitCost?: number;
   batchOrSerial?: string;
   scannedBy?: string;
+  performedBy?: string;
   date: string;
   notes?: string;
 }
@@ -130,6 +131,10 @@ export interface Invoice {
   
   // Accessories Presentation: 'ITEMIZED' (full breakdown for installer) or 'LUMP_SUM' (single package for customer)
   accessoriesMode?: 'ITEMIZED' | 'LUMP_SUM';
+  
+  // Inventory Stock Deduction
+  deductFromInventory?: boolean; // When true, sold product quantities are automatically deducted from solar inventory
+  inventoryDeducted?: boolean; // Tracks whether stock has already been deducted for this invoice
   
   // Equipment Exchange / Trade-In Buyback
   hasTradeIn?: boolean;

@@ -295,19 +295,41 @@ app.post('/api/github/publish', async (req: Request, res: Response) => {
 
     const token = personalAccessToken ? String(personalAccessToken).trim() : '';
 
-    // Stage changes and commit if needed
-    try {
-      await execFileAsync('git', ['add', '-A'], { cwd: __dirname });
-      const { stdout: statusOut } = await execFileAsync('git', ['status', '--porcelain'], { cwd: __dirname });
-      if (statusOut.trim().length > 0) {
-        const msg = (commitMessage && String(commitMessage).trim()) || `feat: update SolarCraft ERP (${new Date().toLocaleDateString()})`;
-        await execFileAsync('git', ['commit', '-m', msg], { cwd: __dirname });
-      }
-    } catch (commitErr: any) {
-      console.warn('Git commit note:', commitErr.message);
+    // 1. Ensure git repository is initialized
+    if (!fs.existsSync(path.join(__dirname, '.git'))) {
+      await execFileAsync('git', ['init'], { cwd: __dirname });
     }
 
-    // Set remote origin URL
+    // 2. Ensure git config
+    try {
+      await execFileAsync('git', ['config', 'user.name', 'Sohail Ahmad'], { cwd: __dirname });
+      await execFileAsync('git', ['config', 'user.email', 'sohailahmad074@gmail.com'], { cwd: __dirname });
+    } catch {}
+
+    // 3. Stage changes
+    await execFileAsync('git', ['add', '-A'], { cwd: __dirname });
+
+    // 4. Commit if needed
+    let hasCommits = false;
+    try {
+      await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: __dirname });
+      hasCommits = true;
+    } catch {
+      hasCommits = false;
+    }
+
+    const { stdout: statusOut } = await execFileAsync('git', ['status', '--porcelain'], { cwd: __dirname });
+    if (!hasCommits || statusOut.trim().length > 0) {
+      const msg = (commitMessage && String(commitMessage).trim()) || `feat: update SolarCraft ERP (${new Date().toLocaleDateString()})`;
+      await execFileAsync('git', ['commit', '-m', msg], { cwd: __dirname });
+    }
+
+    // 5. Ensure branch is main
+    try {
+      await execFileAsync('git', ['branch', '-M', 'main'], { cwd: __dirname });
+    } catch {}
+
+    // 6. Set remote origin URL
     const authenticatedUrl = token
       ? `https://${encodeURIComponent(cleanOwner)}:${encodeURIComponent(token)}@github.com/${cleanOwner}/${cleanRepo}.git`
       : `https://github.com/${cleanOwner}/${cleanRepo}.git`;

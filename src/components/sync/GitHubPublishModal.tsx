@@ -116,7 +116,19 @@ export const GitHubPublishModal: React.FC<GitHubPublishModalProps> = ({
         }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {
+          success: false,
+          error: res.status === 404 
+            ? 'Publishing API endpoint is not available on this static deployment host (e.g. Vercel). Please run 1-Click Deploy from your main AI Studio workspace or use the Terminal / Zip tabs.' 
+            : `Server returned non-JSON response (${res.status})`,
+          details: text.length > 200 ? text.substring(0, 197) + '...' : text || 'Could not parse response from server.',
+        };
+      }
       setPublishResult(data);
 
       if (data.success) {

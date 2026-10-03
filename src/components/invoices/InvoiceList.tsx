@@ -288,7 +288,14 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
 
                     {/* Status Badge */}
                     <td className="py-2 px-3 text-center">
-                      <Badge status={inv.status} size="sm" />
+                      <div className="flex flex-col items-center gap-1">
+                        <Badge status={inv.status} size="sm" />
+                        {inv.inventoryDeducted && (
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded" title="Material was automatically deducted from solar inventory">
+                            📦 Stock Deducted
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Action buttons */}

@@ -256,9 +256,25 @@ export function App() {
       isInitialCloudSyncRef.current = false;
       lastSyncedSignatureRef.current = currentSig;
 
-      // Seed server relay & cloud if currently empty
+      // Seed server relay & cloud if currently empty, or apply cloud state if remote has latest data
       fetchCloudState().then((state) => {
-        if (!state) {
+        if (state && (state.invoices?.length || state.products?.length || state.customers?.length)) {
+          const cloudSig = computeDataSignature(state);
+          if (cloudSig !== currentSig) {
+            lastSyncedSignatureRef.current = cloudSig;
+            setLastAppliedHash(cloudSig);
+            if (state.settings) setSettings(state.settings);
+            if (state.products) setProducts(state.products);
+            if (state.customers) setCustomers(state.customers);
+            if (state.invoices) setInvoices((prev) => mergeInvoicesWithLocal(prev, state.invoices!));
+            if (state.purchaseOrders) setPurchaseOrders(state.purchaseOrders);
+            if (state.expenses) setExpenses(state.expenses);
+            if (state.suppliers) setSuppliers(state.suppliers);
+            if (state.stockMovements) setStockMovements(state.stockMovements);
+            setLastSyncTime(new Date());
+            setSyncStatus('live_1s');
+          }
+        } else if (!state) {
           pushToServerRelay(payload);
           pushFullStateToCloud(payload);
         }
@@ -427,8 +443,95 @@ export function App() {
   // --- INVOICE HANDLERS ---
   const handleSaveInvoice = (newInvoice: Invoice) => {
     let updatedInvoices: Invoice[];
-    const exists = invoices.some((i) => i.id === newInvoice.id);
-    if (exists) {
+    const existingIndex = invoices.findIndex((i) => i.id === newInvoice.id);
+    const existingInvoice = existingIndex >= 0 ? invoices[existingIndex] : null;
+
+    // --- AUTOMATIC SOLAR INVENTORY STOCK DEDUCTION ---
+    let updatedProducts = [...products];
+    let updatedMovements = [...stockMovements];
+    const timestamp = new Date().toISOString();
+    const actionDate = newInvoice.date || timestamp.split('T')[0];
+
+    // 1. If an existing invoice had previously deducted inventory, restore that old inventory first
+    if (existingInvoice && existingInvoice.inventoryDeducted) {
+      for (const oldItem of existingInvoice.items) {
+        const qty = Number(oldItem.quantity) || 0;
+        if (qty <= 0) continue;
+        const targetId = oldItem.productId || updatedProducts.find((p) => p.name.trim().toLowerCase() === oldItem.description.trim().toLowerCase())?.id;
+        if (!targetId) continue;
+
+        const pIndex = updatedProducts.findIndex((p) => p.id === targetId);
+        if (pIndex >= 0) {
+          const p = updatedProducts[pIndex];
+          const restoredQty = p.stockQty + qty;
+          updatedProducts[pIndex] = {
+            ...p,
+            stockQty: restoredQty,
+            updatedAt: timestamp,
+          };
+        }
+      }
+    }
+
+    // 2. Determine if the new/edited invoice should deduct inventory
+    // Default is true for sales invoices (Tax Invoices, Proforma, Warranty Certs)
+    // For quotations, only deduct if user explicitly toggled deductFromInventory === true
+    const isQuotation = newInvoice.type === 'QUOTATION';
+    const shouldDeduct = newInvoice.deductFromInventory !== undefined
+      ? Boolean(newInvoice.deductFromInventory)
+      : !isQuotation;
+
+    if (shouldDeduct) {
+      for (const newItem of newInvoice.items) {
+        const qty = Number(newItem.quantity) || 0;
+        if (qty <= 0) continue;
+
+        // Find product by ID or name matching
+        const targetId = newItem.productId || updatedProducts.find((p) => p.name.trim().toLowerCase() === newItem.description.trim().toLowerCase())?.id;
+        if (!targetId) continue;
+
+        const pIndex = updatedProducts.findIndex((p) => p.id === targetId);
+        if (pIndex >= 0) {
+          const p = updatedProducts[pIndex];
+          const prevStock = p.stockQty;
+          const newStock = Math.max(0, p.stockQty - qty);
+
+          updatedProducts[pIndex] = {
+            ...p,
+            stockQty: newStock,
+            updatedAt: timestamp,
+          };
+
+          // Generate automated outbound stock movement audit record
+          const movement: StockMovement = {
+            id: `mov-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            productId: p.id,
+            productCode: p.code,
+            productName: p.name,
+            category: p.category,
+            type: 'OUT',
+            quantity: qty,
+            previousStock: prevStock,
+            newStock: newStock,
+            reason: `Sold via Invoice #${newInvoice.invoiceNumber}`,
+            referenceNo: newInvoice.invoiceNumber,
+            customerId: newInvoice.customerId,
+            customerName: newInvoice.customerName,
+            performedBy: currentRole,
+            date: actionDate,
+            notes: `Auto stock deduction from Invoice #${newInvoice.invoiceNumber} (${newItem.description})`,
+          };
+          updatedMovements = [movement, ...updatedMovements];
+        }
+      }
+      newInvoice.inventoryDeducted = true;
+      newInvoice.deductFromInventory = true;
+    } else {
+      newInvoice.inventoryDeducted = false;
+      newInvoice.deductFromInventory = false;
+    }
+
+    if (existingIndex >= 0) {
       updatedInvoices = invoices.map((i) => (i.id === newInvoice.id ? newInvoice : i));
     } else {
       updatedInvoices = [newInvoice, ...invoices];
@@ -447,20 +550,27 @@ export function App() {
       };
     });
 
+    // Save all datasets to local storage
     saveInvoices(updatedInvoices);
     saveCustomers(updatedCustomers);
+    saveProducts(updatedProducts);
+    saveStockMovements(updatedMovements);
+
+    // Update React states
     setInvoices(updatedInvoices);
     setCustomers(updatedCustomers);
+    setProducts(updatedProducts);
+    setStockMovements(updatedMovements);
 
     const payload = {
       settings,
-      products,
+      products: updatedProducts,
       customers: updatedCustomers,
       invoices: updatedInvoices,
       purchaseOrders,
       expenses,
       suppliers,
-      stockMovements,
+      stockMovements: updatedMovements,
     };
 
     const newSig = computeDataSignature(payload);
@@ -491,7 +601,58 @@ export function App() {
   };
 
   const handleDeleteInvoice = (id: string) => {
+    const invToDelete = invoices.find((i) => i.id === id);
     const updatedInvoices = invoices.filter((i) => i.id !== id);
+
+    let updatedProducts = [...products];
+    let updatedMovements = [...stockMovements];
+    const timestamp = new Date().toISOString();
+    const actionDate = timestamp.split('T')[0];
+
+    // If deleted invoice had deducted inventory, restore all items back to warehouse stock!
+    if (invToDelete && invToDelete.inventoryDeducted) {
+      for (const item of invToDelete.items) {
+        const qty = Number(item.quantity) || 0;
+        if (qty <= 0) continue;
+
+        const targetId = item.productId || updatedProducts.find((p) => p.name.trim().toLowerCase() === item.description.trim().toLowerCase())?.id;
+        if (!targetId) continue;
+
+        const pIndex = updatedProducts.findIndex((p) => p.id === targetId);
+        if (pIndex >= 0) {
+          const p = updatedProducts[pIndex];
+          const prevStock = p.stockQty;
+          const newStock = p.stockQty + qty;
+
+          updatedProducts[pIndex] = {
+            ...p,
+            stockQty: newStock,
+            updatedAt: timestamp,
+          };
+
+          const movement: StockMovement = {
+            id: `mov-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            productId: p.id,
+            productCode: p.code,
+            productName: p.name,
+            category: p.category,
+            type: 'IN',
+            quantity: qty,
+            previousStock: prevStock,
+            newStock: newStock,
+            reason: `Restored - Deleted Invoice #${invToDelete.invoiceNumber}`,
+            referenceNo: invToDelete.invoiceNumber,
+            customerId: invToDelete.customerId,
+            customerName: invToDelete.customerName,
+            performedBy: currentRole,
+            date: actionDate,
+            notes: `Inventory returned to warehouse upon invoice deletion`,
+          };
+          updatedMovements = [movement, ...updatedMovements];
+        }
+      }
+    }
+
     const updatedCustomers = customers.map((cust) => {
       const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id);
       const totalInvoiced = custInvoices.reduce((acc, i) => acc + (Number(i.grandTotal) || 0), 0);
@@ -507,18 +668,23 @@ export function App() {
 
     saveInvoices(updatedInvoices);
     saveCustomers(updatedCustomers);
+    saveProducts(updatedProducts);
+    saveStockMovements(updatedMovements);
+
     setInvoices(updatedInvoices);
     setCustomers(updatedCustomers);
+    setProducts(updatedProducts);
+    setStockMovements(updatedMovements);
 
     const payload = {
       settings,
-      products,
+      products: updatedProducts,
       customers: updatedCustomers,
       invoices: updatedInvoices,
       purchaseOrders,
       expenses,
       suppliers,
-      stockMovements,
+      stockMovements: updatedMovements,
     };
 
     const newSig = computeDataSignature(payload);

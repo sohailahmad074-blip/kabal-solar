@@ -14,7 +14,9 @@ import {
   RefreshCw,
   ArrowLeftRight,
   PackagePlus,
-  ShieldCheck
+  ShieldCheck,
+  Boxes,
+  AlertCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -91,6 +93,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [warrantyNotes, setWarrantyNotes] = useState(settings.warrantyDisclaimer);
   const [notes, setNotes] = useState('');
   const [accessoriesMode, setAccessoriesMode] = useState<'ITEMIZED' | 'LUMP_SUM'>('ITEMIZED');
+  const [deductFromInventory, setDeductFromInventory] = useState<boolean>(true);
   const [submitAction, setSubmitAction] = useState<'SAVE' | 'SEND' | 'WHATSAPP'>('SAVE');
   const [barcodeScanInput, setBarcodeScanInput] = useState('');
   const [scanMessage, setScanMessage] = useState<string | null>(null);
@@ -259,10 +262,16 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       setWarrantyNotes(existingInvoice.warrantyNotes || settings.warrantyDisclaimer);
       setNotes(existingInvoice.notes || '');
       setAccessoriesMode(existingInvoice.accessoriesMode || 'ITEMIZED');
+      setDeductFromInventory(
+        existingInvoice.deductFromInventory !== undefined
+          ? Boolean(existingInvoice.deductFromInventory)
+          : (existingInvoice.type !== 'QUOTATION')
+      );
     } else {
       // Create new draft
       const prefix = docType === 'QUOTATION' ? settings.quotationPrefix : settings.invoicePrefix;
       setInvoiceNumber(`${prefix}${Math.floor(1000 + Math.random() * 9000)}`);
+      setDeductFromInventory(docType !== 'QUOTATION');
       setSelectedCustomerId('');
       setCustomerName('');
       setCustomerPhone('');
@@ -574,6 +583,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       status,
       payments: paymentsLog,
       accessoriesMode,
+      deductFromInventory,
+      inventoryDeducted: existingInvoice?.inventoryDeducted,
       termsAndConditions,
       warrantyNotes,
       notes,
@@ -636,6 +647,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 if (!existingInvoice) {
                   const prefix = newType === 'QUOTATION' ? settings.quotationPrefix : settings.invoicePrefix;
                   setInvoiceNumber(`${prefix}${Math.floor(1000 + Math.random() * 9000)}`);
+                  setDeductFromInventory(newType !== 'QUOTATION');
                 }
               }}
               className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 focus:border-amber-500 focus:outline-none"
@@ -942,6 +954,50 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             </div>
           </div>
 
+          {/* Auto-Deduct Sold Stock from Solar Inventory Banner */}
+          <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between px-3.5 py-2.5 rounded-lg border text-xs transition-colors shadow-2xs ${
+            deductFromInventory 
+              ? 'bg-emerald-50/90 border-emerald-300' 
+              : 'bg-slate-50 border-slate-200'
+          }`}>
+            <div className="flex items-center gap-2.5">
+              <div className={`flex h-7 w-7 items-center justify-center rounded text-white shadow-2xs shrink-0 ${
+                deductFromInventory ? 'bg-emerald-600' : 'bg-slate-400'
+              }`}>
+                <Boxes className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900">
+                    Auto-Deduct Sold Stock from Solar Inventory:
+                  </span>
+                  <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded border ${
+                    deductFromInventory 
+                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300' 
+                      : 'bg-slate-100 text-slate-600 border-slate-300'
+                  }`}>
+                    {deductFromInventory ? 'ACTIVE (Will Deduct Stock)' : 'OFF (Quotation / Estimate)'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  {deductFromInventory 
+                    ? 'Upon saving this invoice, sold equipment quantities will automatically decrease warehouse inventory and log an outbound dispatch record.'
+                    : 'Quotation / Draft mode: Stock will not be deducted until confirmed as an active invoice sale.'}
+                </p>
+              </div>
+            </div>
+
+            <label className="relative inline-flex items-center cursor-pointer mt-2 sm:mt-0 shrink-0">
+              <input
+                type="checkbox"
+                checked={deductFromInventory}
+                onChange={(e) => setDeductFromInventory(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+
           {/* Quick Scan Toast */}
           {scanMessage && (
             <div className="flex items-center gap-2 rounded bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-bold text-emerald-900 animate-fadeIn">
@@ -970,7 +1026,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                       <option value="">-- Choose Equipment --</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name} ({formatCurrency(p.sellingPrice, settings.currency, settings.currencyPosition)})
+                          {p.name} (Stock: {p.stockQty} {p.unit}) - {formatCurrency(p.sellingPrice, settings.currency, settings.currencyPosition)}
                         </option>
                       ))}
                     </select>
@@ -1101,6 +1157,45 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                     />
                   </div>
                 </div>
+
+                {/* Live Inventory Stock Status Badge */}
+                {(() => {
+                  const matchedProduct = products.find(
+                    (p) => p.id === item.productId || (item.description && p.name.trim().toLowerCase() === item.description.trim().toLowerCase())
+                  );
+                  if (!matchedProduct) return null;
+                  const isExceeded = (Number(item.quantity) || 0) > matchedProduct.stockQty;
+
+                  return (
+                    <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-slate-100 text-[10px]">
+                      <span className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded ${
+                        matchedProduct.stockQty > 0 
+                          ? 'bg-slate-100 text-slate-800 border border-slate-200' 
+                          : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}>
+                        <Boxes className="h-3 w-3 text-slate-500" />
+                        <span>Warehouse Stock: </span>
+                        <strong className={matchedProduct.stockQty > 0 ? 'text-slate-900' : 'text-rose-600'}>
+                          {matchedProduct.stockQty} {matchedProduct.unit}
+                        </strong>
+                      </span>
+
+                      {deductFromInventory && (
+                        <span className="text-[10px] font-medium text-emerald-700 flex items-center gap-0.5">
+                          <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" />
+                          <span>Will deduct {item.quantity || 0} {item.unit || matchedProduct.unit} from inventory</span>
+                        </span>
+                      )}
+
+                      {isExceeded && deductFromInventory && (
+                        <span className="inline-flex items-center gap-1 font-bold text-amber-900 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
+                          <AlertCircle className="h-2.5 w-2.5 text-amber-600" />
+                          <span>Selling qty ({item.quantity}) exceeds warehouse stock ({matchedProduct.stockQty} {matchedProduct.unit})</span>
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>

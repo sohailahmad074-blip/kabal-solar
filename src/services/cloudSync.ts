@@ -327,6 +327,10 @@ export async function sendPingNotification(message?: string): Promise<boolean> {
 // 2. FIRESTORE CLOUD DATABASE ENGINE (Persistent Multi-Device Backup)
 // ============================================================================
 
+let lastFirestorePushTime = 0;
+let firestorePushTimer: any = null;
+let latestPayloadToPush: any = null;
+
 export async function pushFullStateToCloud(data: {
   settings: ShopSettings;
   products: ProductItem[];
@@ -336,34 +340,64 @@ export async function pushFullStateToCloud(data: {
   expenses: Expense[];
   suppliers: Supplier[];
   stockMovements: StockMovement[];
-}): Promise<{ success: boolean; isQuotaExceeded?: boolean; error?: string }> {
+}, immediate: boolean = false): Promise<{ success: boolean; isQuotaExceeded?: boolean; error?: string }> {
   // Always push to high-speed server live relay first for instant local responses
   pushToServerRelay(data).catch(() => {});
 
-  try {
-    const docRef = doc(db, WORKSPACE_DOC_REF, WORKSPACE_DOC_ID);
-    // Sanitize data by converting to clean JSON so undefined fields (e.g. optional item properties)
-    // are stripped out, preventing Firestore "Unsupported field value: undefined" errors
-    const sanitizedPayload: CloudWorkspacePayload = JSON.parse(
-      JSON.stringify({
-        version: 2,
-        updatedAt: new Date().toISOString(),
-        updatedByDevice: `${getDeviceId()} (${getDeviceName()})`,
-        settings: data.settings,
-        products: data.products,
-        customers: data.customers,
-        invoices: data.invoices,
-        purchaseOrders: data.purchaseOrders,
-        expenses: data.expenses,
-        suppliers: data.suppliers,
-        stockMovements: data.stockMovements,
-      })
-    );
-    await setDoc(docRef, sanitizedPayload, { merge: true });
+  latestPayloadToPush = data;
+
+  const executeWrite = async () => {
+    if (!latestPayloadToPush) return { success: true };
+    const payloadData = latestPayloadToPush;
+    latestPayloadToPush = null;
+    lastFirestorePushTime = Date.now();
+
+    try {
+      const docRef = doc(db, WORKSPACE_DOC_REF, WORKSPACE_DOC_ID);
+      // Sanitize data by converting to clean JSON so undefined fields (e.g. optional item properties)
+      // are stripped out, preventing Firestore "Unsupported field value: undefined" errors
+      const sanitizedPayload: CloudWorkspacePayload = JSON.parse(
+        JSON.stringify({
+          version: 2,
+          updatedAt: new Date().toISOString(),
+          updatedByDevice: `${getDeviceId()} (${getDeviceName()})`,
+          settings: payloadData.settings,
+          products: payloadData.products,
+          customers: payloadData.customers,
+          invoices: payloadData.invoices,
+          purchaseOrders: payloadData.purchaseOrders,
+          expenses: payloadData.expenses,
+          suppliers: payloadData.suppliers,
+          stockMovements: payloadData.stockMovements,
+        })
+      );
+      await setDoc(docRef, sanitizedPayload, { merge: true });
+      return { success: true };
+    } catch (error: any) {
+      console.warn('Firestore sync note:', error?.message || error);
+      return { success: false, error: error?.message || 'Push failed' };
+    }
+  };
+
+  const now = Date.now();
+  const timeSinceLast = now - lastFirestorePushTime;
+
+  // Enforce minimum 2.5s between full Firestore writes to respect Spark plan rate limits
+  if (immediate || timeSinceLast >= 2500) {
+    if (firestorePushTimer) {
+      clearTimeout(firestorePushTimer);
+      firestorePushTimer = null;
+    }
+    return executeWrite();
+  } else {
+    if (!firestorePushTimer) {
+      const delay = Math.max(500, 2500 - timeSinceLast);
+      firestorePushTimer = setTimeout(() => {
+        firestorePushTimer = null;
+        executeWrite();
+      }, delay);
+    }
     return { success: true };
-  } catch (error: any) {
-    console.warn('Firestore sync note:', error?.message || error);
-    return { success: false, error: error?.message || 'Push failed' };
   }
 }
 
@@ -550,38 +584,78 @@ export function subscribeToCloudWorkspace(
     }
   }, 5000);
 
-  // 4. Firestore Real-time Continuous Listener (Authoritative Cloud Backbone)
-  try {
-    const docRef = doc(db, WORKSPACE_DOC_REF, WORKSPACE_DOC_ID);
-    firestoreUnsubscribe = onSnapshot(
-      docRef,
-      (snapshot) => {
-        if (isClosed) return;
-        if (snapshot.exists()) {
-          const data = snapshot.data() as CloudWorkspacePayload;
-          const sig = computeDataSignature(data);
-          if (sig !== lastAppliedHash) {
-            lastAppliedHash = sig;
-            isRemoteUpdateInProgress = true;
-            try {
-              onCloudUpdate(data, 'firestore');
-              // Also feed server relay
-              pushToServerRelay(data as any).catch(() => {});
-            } finally {
-              setTimeout(() => { isRemoteUpdateInProgress = false; }, 80);
+  // 4. Firestore Real-time Continuous Listener with Auto-Reconnect (Authoritative Cloud Backbone)
+  let firestoreReconnectTimer: any = null;
+
+  const startFirestoreListener = () => {
+    if (isClosed) return;
+    try {
+      const docRef = doc(db, WORKSPACE_DOC_REF, WORKSPACE_DOC_ID);
+      firestoreUnsubscribe = onSnapshot(
+        docRef,
+        (snapshot) => {
+          if (isClosed) return;
+          if (snapshot.exists()) {
+            const data = snapshot.data() as CloudWorkspacePayload;
+            const sig = computeDataSignature(data);
+            if (sig !== lastAppliedHash) {
+              lastAppliedHash = sig;
+              isRemoteUpdateInProgress = true;
+              try {
+                onCloudUpdate(data, 'firestore');
+                // Also feed server relay
+                pushToServerRelay(data as any).catch(() => {});
+              } finally {
+                setTimeout(() => { isRemoteUpdateInProgress = false; }, 80);
+              }
+              onStatusChange('live_1s');
             }
-            onStatusChange('live_1s');
           }
+        },
+        (error: any) => {
+          if (isClosed) return;
+          console.warn('Firestore subscription status (will auto-reconnect in 8s):', error?.message || error);
+          if (firestoreUnsubscribe) {
+            try { firestoreUnsubscribe(); } catch {}
+            firestoreUnsubscribe = null;
+          }
+          if (firestoreReconnectTimer) clearTimeout(firestoreReconnectTimer);
+          firestoreReconnectTimer = setTimeout(() => {
+            if (!isClosed) startFirestoreListener();
+          }, 8000);
         }
-      },
-      (error: any) => {
-        if (isClosed) return;
-        console.warn('Firestore subscription status:', error?.message || error);
+      );
+    } catch (e) {
+      console.warn('Firestore onSnapshot init error (retry in 8s):', e);
+      if (firestoreReconnectTimer) clearTimeout(firestoreReconnectTimer);
+      firestoreReconnectTimer = setTimeout(() => {
+        if (!isClosed) startFirestoreListener();
+      }, 8000);
+    }
+  };
+
+  startFirestoreListener();
+
+  // 5. Periodic 10-second cloud catchup to ensure mobile and laptop are guaranteed in sync
+  let cloudCheckInterval: any = setInterval(async () => {
+    if (isClosed || isRemoteUpdateInProgress) return;
+    try {
+      const cloudState = await fetchCloudState();
+      if (cloudState && (cloudState.invoices || cloudState.products)) {
+        const sig = computeDataSignature(cloudState);
+        if (sig !== lastAppliedHash) {
+          lastAppliedHash = sig;
+          isRemoteUpdateInProgress = true;
+          try {
+            onCloudUpdate(cloudState, 'firestore');
+          } finally {
+            setTimeout(() => { isRemoteUpdateInProgress = false; }, 80);
+          }
+          onStatusChange('live_1s');
+        }
       }
-    );
-  } catch (e) {
-    console.warn('Firestore onSnapshot init error:', e);
-  }
+    } catch {}
+  }, 10000);
 
   // Cleanup
   return () => {
@@ -597,6 +671,14 @@ export function subscribeToCloudWorkspace(
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
       heartbeatInterval = null;
+    }
+    if (cloudCheckInterval) {
+      clearInterval(cloudCheckInterval);
+      cloudCheckInterval = null;
+    }
+    if (firestoreReconnectTimer) {
+      clearTimeout(firestoreReconnectTimer);
+      firestoreReconnectTimer = null;
     }
     if (broadcastChannel) {
       try { broadcastChannel.close(); } catch {}
