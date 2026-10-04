@@ -16,7 +16,8 @@ import {
   PackagePlus,
   ShieldCheck,
   Boxes,
-  AlertCircle
+  AlertCircle,
+  Tag
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -94,6 +95,9 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const [notes, setNotes] = useState('');
   const [accessoriesMode, setAccessoriesMode] = useState<'ITEMIZED' | 'LUMP_SUM'>('ITEMIZED');
   const [deductFromInventory, setDeductFromInventory] = useState<boolean>(true);
+  const [specialDiscount, setSpecialDiscount] = useState<number>(0);
+  const [specialDiscountType, setSpecialDiscountType] = useState<'FLAT' | 'PERCENT'>('FLAT');
+  const [specialDiscountReason, setSpecialDiscountReason] = useState<string>('');
   const [submitAction, setSubmitAction] = useState<'SAVE' | 'SEND' | 'WHATSAPP'>('SAVE');
   const [barcodeScanInput, setBarcodeScanInput] = useState('');
   const [scanMessage, setScanMessage] = useState<string | null>(null);
@@ -267,11 +271,17 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
           ? Boolean(existingInvoice.deductFromInventory)
           : (existingInvoice.type !== 'QUOTATION')
       );
+      setSpecialDiscount(existingInvoice.specialDiscount || 0);
+      setSpecialDiscountType(existingInvoice.specialDiscountType || 'FLAT');
+      setSpecialDiscountReason(existingInvoice.specialDiscountReason || '');
     } else {
       // Create new draft
       const prefix = docType === 'QUOTATION' ? settings.quotationPrefix : settings.invoicePrefix;
       setInvoiceNumber(`${prefix}${Math.floor(1000 + Math.random() * 9000)}`);
       setDeductFromInventory(docType !== 'QUOTATION');
+      setSpecialDiscount(0);
+      setSpecialDiscountType('FLAT');
+      setSpecialDiscountReason('');
       setSelectedCustomerId('');
       setCustomerName('');
       setCustomerPhone('');
@@ -474,10 +484,18 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
 
   const subtotal = items.reduce((acc, itm) => acc + (itm.quantity * itm.unitPrice), 0);
   const totalItemLevelTotal = items.reduce((acc, itm) => acc + itm.total, 0);
-  const discountTotal = Math.max(0, subtotal - totalItemLevelTotal);
-  const taxableBase = Math.max(0, totalItemLevelTotal - tradeInTotal);
+  const lineDiscountTotal = Math.max(0, subtotal - totalItemLevelTotal);
+
+  // Special Overall Invoice Discount calculation
+  const specialDiscountValue = specialDiscountType === 'PERCENT'
+    ? Math.max(0, (totalItemLevelTotal * (Number(specialDiscount) || 0)) / 100)
+    : Math.max(0, Number(specialDiscount) || 0);
+
+  const discountTotal = Number((lineDiscountTotal + specialDiscountValue).toFixed(2));
+  const postDiscountTotal = Math.max(0, totalItemLevelTotal - specialDiscountValue);
+  const taxableBase = Math.max(0, postDiscountTotal - tradeInTotal);
   const taxAmount = (taxableBase * (taxPercent / 100));
-  const grandTotal = Math.max(0, Math.round((totalItemLevelTotal - tradeInTotal + taxAmount + Number(shippingOrFreight || 0) + Number(installationCharge || 0)) * 100) / 100);
+  const grandTotal = Math.max(0, Math.round((postDiscountTotal - tradeInTotal + taxAmount + Number(shippingOrFreight || 0) + Number(installationCharge || 0)) * 100) / 100);
   const balanceDue = Math.max(0, grandTotal - paidAmount);
 
   let status: PaymentStatus = 'UNPAID';
@@ -580,6 +598,9 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       grandTotal,
       paidAmount,
       balanceDue,
+      specialDiscount: specialDiscountValue > 0 ? Number(specialDiscount) : undefined,
+      specialDiscountType: specialDiscountValue > 0 ? specialDiscountType : undefined,
+      specialDiscountReason: specialDiscountReason || undefined,
       status,
       payments: paymentsLog,
       accessoriesMode,
@@ -1091,6 +1112,23 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                     />
                   </div>
 
+                  {/* Line Discount % */}
+                  <div className="w-16">
+                    <label className="text-[9px] font-bold uppercase text-slate-500 block mb-0.5" title="Line Discount Percentage">
+                      Disc %
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="100"
+                      value={item.discountPercent || 0}
+                      onChange={(e) => handleItemChange(index, 'discountPercent', parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs font-semibold text-slate-900 text-center focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
                   {/* Line Total */}
                   <div className="w-24 text-right">
                     <label className="text-[9px] font-bold uppercase text-slate-500 block mb-0.5">
@@ -1437,10 +1475,163 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
               </span>
             </div>
 
-            {discountTotal > 0 && (
+            {lineDiscountTotal > 0 && (
               <div className="flex items-center justify-between text-xs text-emerald-600">
-                <span>Total Line Discounts:</span>
-                <span>-{formatCurrency(discountTotal, settings.currency, settings.currencyPosition)}</span>
+                <span>Line Items Discounts:</span>
+                <span>-{formatCurrency(lineDiscountTotal, settings.currency, settings.currencyPosition)}</span>
+              </div>
+            )}
+
+            {/* Overall Invoice Special Discount / Commercial Rebate */}
+            <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-amber-950 flex items-center gap-1">
+                  <Tag className="h-3.5 w-3.5 text-amber-700" />
+                  Overall Invoice Discount / Rebate
+                </span>
+                <div className="flex items-center gap-1 bg-white rounded border border-amber-300 p-0.5 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setSpecialDiscountType('FLAT')}
+                    className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                      specialDiscountType === 'FLAT'
+                        ? 'bg-amber-400 text-slate-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Flat ({settings.currency})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpecialDiscountType('PERCENT')}
+                    className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                      specialDiscountType === 'PERCENT'
+                        ? 'bg-amber-400 text-slate-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Percent (%)
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={specialDiscount || ''}
+                      onChange={(e) => setSpecialDiscount(parseFloat(e.target.value) || 0)}
+                      placeholder={specialDiscountType === 'FLAT' ? '0' : '0%'}
+                      className="w-full rounded border border-amber-300 bg-white px-2.5 py-1 text-xs font-black text-amber-900 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  {/* Quick Presets */}
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <span className="text-[9px] text-amber-800">Quick:</span>
+                    {specialDiscountType === 'FLAT' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setSpecialDiscount((prev) => (prev || 0) + 1000)}
+                          className="rounded bg-white border border-amber-200 px-1.5 py-0.2 text-[9px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                        >
+                          +1k
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSpecialDiscount((prev) => (prev || 0) + 2000)}
+                          className="rounded bg-white border border-amber-200 px-1.5 py-0.2 text-[9px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                        >
+                          +2k
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSpecialDiscount((prev) => (prev || 0) + 5000)}
+                          className="rounded bg-white border border-amber-200 px-1.5 py-0.2 text-[9px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                        >
+                          +5k
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSpecialDiscount((prev) => (prev || 0) + 10000)}
+                          className="rounded bg-white border border-amber-200 px-1.5 py-0.2 text-[9px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                        >
+                          +10k
+                        </button>
+                        {specialDiscount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSpecialDiscount(0)}
+                            className="rounded bg-white border border-rose-200 px-1.5 py-0.2 text-[9px] font-bold text-rose-700 hover:bg-rose-50 cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setSpecialDiscount(2)}
+                          className="rounded bg-white border border-amber-200 px-1.5 py-0.2 text-[9px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                        >
+                          2%
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSpecialDiscount(5)}
+                          className="rounded bg-white border border-amber-200 px-1.5 py-0.2 text-[9px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                        >
+                          5%
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSpecialDiscount(10)}
+                          className="rounded bg-white border border-amber-200 px-1.5 py-0.2 text-[9px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                        >
+                          10%
+                        </button>
+                        {specialDiscount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSpecialDiscount(0)}
+                            className="rounded bg-white border border-rose-200 px-1.5 py-0.2 text-[9px] font-bold text-rose-700 hover:bg-rose-50 cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="text"
+                    value={specialDiscountReason}
+                    onChange={(e) => setSpecialDiscountReason(e.target.value)}
+                    placeholder="Reason (e.g. Ramadan promo, Package discount)"
+                    className="w-full rounded border border-amber-200 bg-white px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:border-amber-400 focus:outline-none"
+                  />
+                  {specialDiscountValue > 0 && (
+                    <p className="mt-1 text-[10px] font-bold text-emerald-800 text-right">
+                      Deducting: -{formatCurrency(specialDiscountValue, settings.currency, settings.currencyPosition)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {specialDiscountValue > 0 && (
+              <div className="flex items-center justify-between text-xs text-emerald-700 font-semibold">
+                <span>
+                  Special Invoice Discount {specialDiscountType === 'PERCENT' ? `(${specialDiscount}%)` : ''}
+                  {specialDiscountReason ? ` [${specialDiscountReason}]` : ''}:
+                </span>
+                <span>-{formatCurrency(specialDiscountValue, settings.currency, settings.currencyPosition)}</span>
               </div>
             )}
 

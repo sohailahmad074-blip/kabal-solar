@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Save, Scan } from 'lucide-react';
+import { Package, Save, Scan, Plus, Check, X } from 'lucide-react';
 import { ProductItem, ProductCategory, ShopSettings, UserRole } from '../../types/solar';
 import { Modal } from '../common/Modal';
 import { generateBarcodeSvg } from '../../utils/barcodeGenerator';
@@ -11,6 +11,7 @@ interface ProductEditorModalProps {
   onSave: (product: ProductItem) => void;
   existingProduct?: ProductItem | null;
   settings: ShopSettings;
+  onUpdateSettings?: (settings: ShopSettings) => void;
   prefillCode?: string;
   currentRole?: UserRole;
 }
@@ -21,6 +22,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   onSave,
   existingProduct,
   settings,
+  onUpdateSettings,
   prefillCode,
   currentRole = 'OWNER',
 }) => {
@@ -41,6 +43,8 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   const [capacityKwh, setCapacityKwh] = useState<number | undefined>(undefined);
   const [warrantyYears, setWarrantyYears] = useState<number | undefined>(undefined);
   const [notes, setNotes] = useState('');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   useEffect(() => {
     if (existingProduct) {
@@ -80,6 +84,25 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       setNotes('');
     }
   }, [existingProduct, isOpen, prefillCode]);
+
+  const handleSaveNewCategory = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    const cleanKey = newCategoryName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    const existing = settings.customCategories || [];
+    if (!existing.includes(cleanKey)) {
+      const updatedSettings: ShopSettings = {
+        ...settings,
+        customCategories: [...existing, cleanKey],
+      };
+      if (onUpdateSettings) {
+        onUpdateSettings(updatedSettings);
+      }
+    }
+    setCategory(cleanKey as ProductCategory);
+    setIsAddingCategory(false);
+    setNewCategoryName('');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,20 +192,75 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
           </div>
 
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Category
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as ProductCategory)}
-              className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800 focus:border-amber-500 focus:outline-none"
-            >
-              {getAllCategories(settings).map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Category
+              </label>
+              {!isAddingCategory ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCategory(true)}
+                  className="text-[10px] font-bold text-amber-700 hover:text-amber-800 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                  <span>+ New Category</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCategory(false)}
+                  className="text-[10px] text-slate-500 hover:text-slate-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+
+            {isAddingCategory ? (
+              <div className="mt-1 flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="e.g. Microinverters, Wind Turbines"
+                  className="flex-1 rounded border border-amber-300 bg-amber-50/50 px-2 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveNewCategory();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveNewCategory}
+                  className="rounded bg-amber-400 hover:bg-amber-500 px-2 py-1 text-xs font-bold text-slate-900 flex items-center gap-0.5 cursor-pointer shadow-2xs"
+                >
+                  <Check className="h-3 w-3" />
+                  <span>Save</span>
+                </button>
+              </div>
+            ) : (
+              <select
+                value={category}
+                onChange={(e) => {
+                  if (e.target.value === '__ADD_NEW__') {
+                    setIsAddingCategory(true);
+                  } else {
+                    setCategory(e.target.value as ProductCategory);
+                  }
+                }}
+                className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800 focus:border-amber-500 focus:outline-none"
+              >
+                {getAllCategories(settings).map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.label}
+                  </option>
+                ))}
+                <option value="__ADD_NEW__">+ Add Custom Category...</option>
+              </select>
+            )}
           </div>
 
           <div>

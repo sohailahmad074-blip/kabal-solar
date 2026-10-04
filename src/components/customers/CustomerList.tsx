@@ -17,11 +17,21 @@ import {
   TrendingUp,
   Sparkles,
   Zap,
-  Send
+  Send,
+  DollarSign,
+  Copy,
+  Check,
+  X,
+  Tag
 } from 'lucide-react';
-import { Customer, ShopSettings, Invoice } from '../../types/solar';
+import { Customer, ShopSettings, Invoice, PaymentRequestMessageType } from '../../types/solar';
 import { formatCurrency } from '../../utils/formatters';
-import { formatWhatsAppNumber, openWhatsApp } from '../../utils/sendDirect';
+import { 
+  formatWhatsAppNumber, 
+  openWhatsApp, 
+  buildPaymentRequestMessage, 
+  buildCustomerBalanceReminderMessage 
+} from '../../utils/sendDirect';
 import { BulkBalanceReminderModal } from './BulkBalanceReminderModal';
 
 interface CustomerListProps {
@@ -33,21 +43,50 @@ interface CustomerListProps {
   onDeleteCustomer: (id: string) => void;
   onOpenInvoiceForCustomer: (customer: Customer) => void;
   onPrintCustomerStatement?: (customer: Customer) => void;
+  onRecordPayment?: (invoice: Invoice) => void;
 }
 
 export const CustomerList: React.FC<CustomerListProps> = ({
   customers,
+  invoices = [],
   settings,
   onOpenCustomerEditor,
   onViewCustomerDetail,
   onDeleteCustomer,
   onOpenInvoiceForCustomer,
   onPrintCustomerStatement,
+  onRecordPayment,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [balanceFilter, setBalanceFilter] = useState<'ALL' | 'WITH_BALANCE' | 'CLEARED'>('ALL');
   const [isBulkReminderOpen, setIsBulkReminderOpen] = useState(false);
+  const [reminderCustomer, setReminderCustomer] = useState<Customer | null>(null);
+  const [reminderMessageType, setReminderMessageType] = useState<PaymentRequestMessageType>('FRIENDLY');
+  const [reminderCustomNote, setReminderCustomNote] = useState<string>('');
+  const [copiedReminder, setCopiedReminder] = useState<boolean>(false);
+
+  const getCustomerReminderMessage = (cust: Customer) => {
+    const custInvoices = invoices.filter((i) => i.customerId === cust.id && i.balanceDue > 0);
+    const primaryInvoice = custInvoices[0] || invoices.find((i) => i.customerId === cust.id);
+    if (primaryInvoice) {
+      return buildPaymentRequestMessage(
+        { ...primaryInvoice, balanceDue: cust.balanceDue || primaryInvoice.balanceDue },
+        settings,
+        reminderMessageType,
+        reminderCustomNote
+      );
+    }
+    return buildCustomerBalanceReminderMessage(cust, settings, reminderMessageType as any, reminderCustomNote);
+  };
+
+  const handleOpenReminderModal = (cust: Customer, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setReminderCustomer(cust);
+    setReminderMessageType('FRIENDLY');
+    setReminderCustomNote('');
+    setCopiedReminder(false);
+  };
 
   const filteredCustomers = customers.filter((c) => {
     const matchesSearch =
@@ -474,13 +513,70 @@ export const CustomerList: React.FC<CustomerListProps> = ({
                       {/* Friendly Actions */}
                       <td className="py-3 px-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
+                          {/* Quick Receive Payment & Grant Discount button */}
+                          {hasDue && onRecordPayment && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const custInvoices = invoices.filter(i => i.customerId === customer.id && i.balanceDue > 0);
+                                const targetInvoice = custInvoices[0] || invoices.find(i => i.customerId === customer.id);
+                                if (targetInvoice) {
+                                  onRecordPayment(targetInvoice);
+                                } else {
+                                  const bal = customer.balanceDue || 0;
+                                  const ledgerInvoice: any = {
+                                    id: `inv-ledger-${customer.id}`,
+                                    invoiceNumber: `BAL-${customer.id.slice(-6).toUpperCase()}`,
+                                    type: 'INVOICE',
+                                    customerId: customer.id,
+                                    customerName: customer.name,
+                                    customerPhone: customer.phone,
+                                    customerEmail: customer.email,
+                                    customerAddress: customer.address,
+                                    customerCity: customer.city,
+                                    date: new Date().toISOString().split('T')[0],
+                                    dueDate: new Date().toISOString().split('T')[0],
+                                    items: [
+                                      {
+                                        id: `item-bal-${Date.now()}`,
+                                        description: 'Account Outstanding Dues / Milestone',
+                                        quantity: 1,
+                                        unitPrice: bal,
+                                        total: bal,
+                                        category: 'SERVICES_LABOR',
+                                      }
+                                    ],
+                                    subtotal: bal,
+                                    taxRate: 0,
+                                    taxTotal: 0,
+                                    discountTotal: 0,
+                                    grandTotal: bal,
+                                    paidAmount: 0,
+                                    balanceDue: bal,
+                                    status: 'UNPAID',
+                                    payments: [],
+                                    createdAt: customer.createdAt || new Date().toISOString(),
+                                    updatedAt: new Date().toISOString(),
+                                  };
+                                  onRecordPayment(ledgerInvoice);
+                                }
+                              }}
+                              className="rounded-lg px-2 py-1 text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 transition-colors shadow-2xs inline-flex items-center gap-1 font-bold text-xs cursor-pointer"
+                              title="Receive Payment & Grant Settlement Discount"
+                            >
+                              <DollarSign className="h-3.5 w-3.5 text-emerald-700" />
+                              <span className="hidden xl:inline text-[10px]">Receive Pay</span>
+                            </button>
+                          )}
+
                           {/* Friendly WhatsApp Reminder button for outstanding balance */}
                           {hasDue && (
                             <button
                               type="button"
-                              onClick={(e) => handleSendWhatsAppReminder(customer, e)}
-                              className="rounded-lg p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-2xs"
-                              title="Send Friendly WhatsApp Payment Reminder"
+                              onClick={(e) => handleOpenReminderModal(customer, e)}
+                              className="rounded-lg p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-2xs cursor-pointer"
+                              title="Send WhatsApp Payment Notice (Choose Template)"
                             >
                               <MessageCircle className="h-3.5 w-3.5" />
                             </button>
@@ -575,6 +671,198 @@ export const CustomerList: React.FC<CustomerListProps> = ({
         customers={customers}
         settings={settings}
       />
+
+      {/* Individual Customer WhatsApp Payment Notice Modal with Template Selector */}
+      {reminderCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
+          <div className="relative w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-2xl my-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                  <MessageCircle className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    WhatsApp Payment Notice
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {reminderCustomer.name} • 📞 {reminderCustomer.phone || reminderCustomer.whatsapp}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReminderCustomer(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Summary */}
+            <div className="my-3 rounded-lg bg-rose-50/70 p-3 border border-rose-200/80 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800">
+                  Outstanding Balance Due:
+                </span>
+                <p className="text-base font-black text-rose-700 font-mono">
+                  {formatCurrency(reminderCustomer.balanceDue, settings.currency, settings.currencyPosition)}
+                </p>
+              </div>
+              <div className="text-right text-[11px] text-slate-600">
+                <p>Billed: {formatCurrency(reminderCustomer.totalInvoiced, settings.currency, settings.currencyPosition)}</p>
+                <p className="text-emerald-700 font-semibold">Paid: {formatCurrency(reminderCustomer.totalPaid, settings.currency, settings.currencyPosition)}</p>
+              </div>
+            </div>
+
+            {/* Message Template Type Selection */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                Select Payment Message Type:
+              </label>
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => setReminderMessageType('FRIENDLY')}
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                    reminderMessageType === 'FRIENDLY'
+                      ? 'bg-emerald-700 text-white shadow-2xs'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  🌿 Friendly Reminder
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReminderMessageType('COMMERCIAL')}
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                    reminderMessageType === 'COMMERCIAL'
+                      ? 'bg-emerald-700 text-white shadow-2xs'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  💼 Commercial & Bank
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReminderMessageType('SOLAR_MILESTONE')}
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                    reminderMessageType === 'SOLAR_MILESTONE'
+                      ? 'bg-emerald-700 text-white shadow-2xs'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  ⚡ Solar Milestone Call
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReminderMessageType('URDU_ENG')}
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                    reminderMessageType === 'URDU_ENG'
+                      ? 'bg-emerald-700 text-white shadow-2xs'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  🇵🇰 Urdu یاددہانی
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReminderMessageType('URGENT')}
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                    reminderMessageType === 'URGENT'
+                      ? 'bg-rose-700 text-white shadow-2xs'
+                      : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+                  }`}
+                >
+                  🚨 Urgent Overdue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReminderMessageType('SHORT_SMS')}
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                    reminderMessageType === 'SHORT_SMS'
+                      ? 'bg-slate-800 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200'
+                  }`}
+                >
+                  📱 Short Text
+                </button>
+              </div>
+
+              {/* Custom Note input */}
+              <div>
+                <input
+                  type="text"
+                  value={reminderCustomNote}
+                  onChange={(e) => setReminderCustomNote(e.target.value)}
+                  placeholder="Optional custom remark / payment instructions (e.g. Please clear before dispatch tomorrow)"
+                  className="w-full rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              {/* Message Live Preview */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                  Message Preview:
+                </label>
+                <pre className="max-h-44 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-2.5 text-[10px] text-slate-800 font-mono border border-slate-200 leading-relaxed">
+                  {getCustomerReminderMessage(reminderCustomer)}
+                </pre>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setReminderCustomer(null)}
+                className="rounded px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const msg = getCustomerReminderMessage(reminderCustomer);
+                    navigator.clipboard.writeText(msg);
+                    setCopiedReminder(true);
+                    setTimeout(() => setCopiedReminder(false), 2000);
+                  }}
+                  className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  {copiedReminder ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      <span className="text-emerald-700">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" />
+                      <span>Copy Text</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetPhone = reminderCustomer.whatsapp || reminderCustomer.phone || '';
+                    const msg = getCustomerReminderMessage(reminderCustomer);
+                    openWhatsApp(targetPhone, msg);
+                    setReminderCustomer(null);
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>Send via WhatsApp</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

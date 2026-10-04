@@ -410,8 +410,12 @@ export const CustomerPortalView: React.FC<CustomerPortalViewProps> = ({
             </div>
 
             {invoice.discountTotal > 0 && (
-              <div className="flex justify-between text-rose-600 py-0.5">
-                <span>Contract Discount:</span>
+              <div className="flex justify-between text-emerald-700 py-0.5 font-medium">
+                <span>
+                  {invoice.specialDiscount && invoice.specialDiscount > 0
+                    ? `Discount ${invoice.specialDiscountType === 'PERCENT' ? `(${invoice.specialDiscount}%)` : ''}${invoice.specialDiscountReason ? ` [${invoice.specialDiscountReason}]` : ''}:`
+                    : 'Discount / Rebate:'}
+                </span>
                 <span className="font-mono">-{formatCurrency(invoice.discountTotal, settings.currency, settings.currencyPosition)}</span>
               </div>
             )}

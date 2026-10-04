@@ -90,11 +90,27 @@ export interface PaymentRecord {
   id: string;
   date: string;
   amount: number;
+  discount?: number; // Settlement discount or waiver granted during payment collection
   method: PaymentMethod;
   referenceNo?: string;
   notes?: string;
   recordedBy?: string;
 }
+
+export type PaymentRequestMessageType = 
+  | 'FRIENDLY' 
+  | 'COMMERCIAL' 
+  | 'URGENT' 
+  | 'SOLAR_MILESTONE' 
+  | 'URDU_ENG' 
+  | 'SHORT_SMS';
+
+export type PaymentReceiptMessageType = 
+  | 'OFFICIAL_RECEIPT' 
+  | 'MILESTONE_CONFIRMED' 
+  | 'FULL_SETTLEMENT' 
+  | 'URDU_RECEIPT' 
+  | 'SHORT_RECEIPT';
 
 export interface InvoiceTradeInItem {
   id: string;
@@ -143,6 +159,10 @@ export interface Invoice {
 
   subtotal: number;
   discountTotal: number;
+  specialDiscount?: number; // Flat or percentage additional discount on entire invoice
+  specialDiscountType?: 'FLAT' | 'PERCENT';
+  specialDiscountReason?: string;
+  settlementDiscountTotal?: number; // Total discounts/waivers granted during payment collections
   taxPercent: number;
   taxAmount: number;
   shippingOrFreight: number;

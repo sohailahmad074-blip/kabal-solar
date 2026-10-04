@@ -508,10 +508,14 @@ export const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({
               </span>
             </div>
 
-            {(invoice.discountTotal || invoice.discountAmount) ? (
+            {(invoice.discountTotal || (invoice as any).discountAmount) ? (
               <div className="flex justify-between py-1 border-b border-slate-200 text-emerald-700">
-                <span>Total Discounts:</span>
-                <span>-{formatCurrency((invoice.discountTotal || invoice.discountAmount || 0), settings.currency, settings.currencyPosition)}</span>
+                <span>
+                  {invoice.specialDiscount && invoice.specialDiscount > 0
+                    ? `Total Discount ${invoice.specialDiscountType === 'PERCENT' ? `(${invoice.specialDiscount}%)` : ''}${invoice.specialDiscountReason ? ` [${invoice.specialDiscountReason}]` : ''}:`
+                    : 'Total Discounts:'}
+                </span>
+                <span>-{formatCurrency((invoice.discountTotal || (invoice as any).discountAmount || 0), settings.currency, settings.currencyPosition)}</span>
               </div>
             ) : null}
 

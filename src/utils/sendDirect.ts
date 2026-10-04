@@ -1,4 +1,10 @@
-import { Invoice, ShopSettings, Customer } from '../types/solar';
+import { 
+  Invoice, 
+  ShopSettings, 
+  Customer, 
+  PaymentRequestMessageType, 
+  PaymentReceiptMessageType 
+} from '../types/solar';
 import { formatCurrency, formatDate } from './formatters';
 
 /**
@@ -125,7 +131,13 @@ export const buildWhatsAppMessage = (invoice: Invoice, settings: ShopSettings): 
   message += `\n💵 *FINANCIAL SUMMARY:*\n`;
   message += `• *New Equipment Subtotal:* ${formatCurrency(invoice.subtotal, currency, pos)}\n`;
   if (invoice.discountTotal > 0) {
-    message += `• *Discount:* -${formatCurrency(invoice.discountTotal, currency, pos)}\n`;
+    if (invoice.specialDiscount && invoice.specialDiscount > 0) {
+      const typeStr = invoice.specialDiscountType === 'PERCENT' ? `${invoice.specialDiscount}%` : '';
+      const reasonStr = invoice.specialDiscountReason ? ` (${invoice.specialDiscountReason})` : '';
+      message += `• *Special Discount${typeStr ? ` [${typeStr}]` : ''}${reasonStr}:* -${formatCurrency(invoice.discountTotal, currency, pos)}\n`;
+    } else {
+      message += `• *Discount:* -${formatCurrency(invoice.discountTotal, currency, pos)}\n`;
+    }
   }
   if (invoice.hasTradeIn && (invoice.tradeInTotal || 0) > 0) {
     message += `• *Old Equipment Buyback Credit:* -${formatCurrency(invoice.tradeInTotal || 0, currency, pos)}\n`;
@@ -460,6 +472,314 @@ export const buildCustomerBalanceReminderMessage = (
   }
   msg += `Please let us know if you have any questions or need any assistance. Thank you for choosing *${shop}*! ☀️\n\n`;
   msg += `📞 *Contact:* ${settings.phone}`;
+  return msg;
+};
+
+/**
+ * Build tailored payment request message for an invoice with multiple selectable message types
+ */
+export const buildPaymentRequestMessage = (
+  invoice: Invoice,
+  settings: ShopSettings,
+  messageType: PaymentRequestMessageType = 'FRIENDLY',
+  customNote?: string
+): string => {
+  const shop = settings.shopName || 'SolarCraft ERP';
+  const currency = settings.currency;
+  const pos = settings.currencyPosition;
+  const balanceStr = formatCurrency(invoice.balanceDue, currency, pos);
+  const totalStr = formatCurrency(invoice.grandTotal, currency, pos);
+  const paidStr = formatCurrency(invoice.paidAmount, currency, pos);
+  const docUrl = getCustomerPortalUrl(invoice.id);
+
+  if (messageType === 'URGENT') {
+    let msg = `🚨 *URGENT PAYMENT NOTICE - ${shop}*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `Attention: *${invoice.customerName}*\n\n`;
+    msg += `This is an urgent reminder regarding overdue payment for *Invoice #${invoice.invoiceNumber}*.\n\n`;
+    msg += `• *Invoice Total:* ${totalStr}\n`;
+    msg += `• *Paid So Far:* ${paidStr}\n`;
+    msg += `• 🔴 *OVERDUE BALANCE DUE: ${balanceStr}*\n`;
+    msg += `• *Due Date:* ${formatDate(invoice.dueDate)}\n\n`;
+    if (customNote) {
+      msg += `⚠️ *Urgent Remarks:* ${customNote}\n\n`;
+    }
+    msg += `Please arrange immediate settlement today to avoid any delays in equipment dispatch or warranty validation.\n\n`;
+    if (settings.bankAccountNumber) {
+      msg += `🏦 *Direct Bank Transfer Details:*\n`;
+      msg += `• Bank: *${settings.bankName}*\n`;
+      msg += `• Title: *${settings.bankAccountTitle}*\n`;
+      msg += `• Account #: *${settings.bankAccountNumber}*\n`;
+      if (settings.ibanOrSwift) msg += `• IBAN: *${settings.ibanOrSwift}*\n`;
+      msg += `\n`;
+    }
+    if (docUrl) msg += `🔗 *View Invoice Online:* ${docUrl}\n\n`;
+    msg += `Please share the bank transfer receipt once transferred. Thank you.\n📞 *Support:* ${settings.phone}`;
+    return msg;
+  }
+
+  if (messageType === 'COMMERCIAL') {
+    let msg = `💼 *COMMERCIAL PAYMENT REQUEST*\n`;
+    msg += `*${shop}*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `Dear *${invoice.customerName}*,\n\n`;
+    msg += `Please find the payment request for your solar hardware invoice below:\n\n`;
+    msg += `📄 *Invoice Number:* ${invoice.invoiceNumber}\n`;
+    msg += `📅 *Date of Issue:* ${formatDate(invoice.date)}\n`;
+    msg += `⏳ *Payment Due:* ${formatDate(invoice.dueDate)}\n`;
+    if (invoice.projectSystemCapacityKw) {
+      msg += `⚡ *Capacity:* ${invoice.projectSystemCapacityKw} kW\n`;
+    }
+    msg += `\n📊 *FINANCIAL STATEMENT:*\n`;
+    msg += `• Invoice Grand Total: ${totalStr}\n`;
+    msg += `• Total Paid / Cleared: ${paidStr}\n`;
+    msg += `• 💳 *PAYABLE BALANCE: ${balanceStr}*\n\n`;
+    if (customNote) {
+      msg += `📝 *Notes:* ${customNote}\n\n`;
+    }
+    if (settings.bankAccountNumber) {
+      msg += `🏦 *OFFICIAL BANK REMITTANCE:*\n`;
+      msg += `• *Bank:* ${settings.bankName}\n`;
+      msg += `• *Account Title:* ${settings.bankAccountTitle}\n`;
+      msg += `• *Account #:* ${settings.bankAccountNumber}\n`;
+      if (settings.ibanOrSwift) msg += `• *IBAN:* ${settings.ibanOrSwift}\n`;
+      msg += `\n`;
+    }
+    if (docUrl) msg += `🔗 *Official Digital Invoice:* ${docUrl}\n\n`;
+    msg += `Regards,\n*${settings.ownerName || settings.shopName}*\n📞 ${settings.phone}`;
+    return msg;
+  }
+
+  if (messageType === 'SOLAR_MILESTONE') {
+    let msg = `⚡ *SOLAR PROJECT MILESTONE PAYMENT CALL*\n`;
+    msg += `*${shop}*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `Dear *${invoice.customerName}*,\n\n`;
+    msg += `Great news! The equipment allocation and procurement for your *${invoice.projectSystemCapacityKw ? `${invoice.projectSystemCapacityKw} kW ` : ''}solar system* is ready.\n\n`;
+    msg += `To schedule the installation engineering team and dispatch materials to your site, please release the milestone payment below:\n\n`;
+    msg += `📄 *Invoice Ref:* ${invoice.invoiceNumber}\n`;
+    msg += `• Total Project Cost: ${totalStr}\n`;
+    msg += `• Advance Already Received: ${paidStr}\n`;
+    msg += `• ⚡ *Milestone Balance Due: ${balanceStr}*\n\n`;
+    if (customNote) {
+      msg += `🔧 *Milestone Details:* ${customNote}\n\n`;
+    }
+    if (settings.bankAccountNumber) {
+      msg += `🏦 *Bank Transfer Details:*\n`;
+      msg += `• Bank: *${settings.bankName}*\n`;
+      msg += `• Account Title: *${settings.bankAccountTitle}*\n`;
+      msg += `• Account #: *${settings.bankAccountNumber}*\n`;
+      if (settings.ibanOrSwift) msg += `• IBAN: *${settings.ibanOrSwift}*\n`;
+      msg += `\n`;
+    }
+    if (docUrl) msg += `🔗 *View Document:* ${docUrl}\n\n`;
+    msg += `Thank you for partnering with *${shop}* towards clean solar energy! ☀️\n📞 *Call/WhatsApp:* ${settings.phone}`;
+    return msg;
+  }
+
+  if (messageType === 'URDU_ENG') {
+    let msg = `☀️ *${shop}* (سولر سسٹمز)\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `السلام علیکم محترم *${invoice.customerName}* صاحب!\n\n`;
+    msg += `امید ہے آپ خیریت سے ہوں گے۔ یہ میسج آپ کے سولر انوائس *#${invoice.invoiceNumber}* کے بقایا جات کی ادائیگی کی یاددہانی کے لیے بھیجا جا رہا ہے۔\n\n`;
+    msg += `📊 *انوائس تفصیلات (Bill Details):*\n`;
+    msg += `• کُل انوائس رقم (Total Bill): ${totalStr}\n`;
+    msg += `• موصول شدہ رقم (Paid): ${paidStr}\n`;
+    msg += `• 🔴 *بقایا واجب الادا رقم (Balance Due): ${balanceStr}*\n`;
+    msg += `• آخری تاریخ (Due Date): ${formatDate(invoice.dueDate)}\n\n`;
+    if (customNote) {
+      msg += `📝 *ضروری نوٹ:* ${customNote}\n\n`;
+    }
+    if (settings.bankAccountNumber) {
+      msg += `🏦 *بینک اکاؤنٹ تفصیلات برائے ادائیگی:*\n`;
+      msg += `• بینک: *${settings.bankName}*\n`;
+      msg += `• اکاؤنٹ نام: *${settings.bankAccountTitle}*\n`;
+      msg += `• اکاؤنٹ نمبر: *${settings.bankAccountNumber}*\n`;
+      if (settings.ibanOrSwift) msg += `• IBAN: *${settings.ibanOrSwift}*\n`;
+      msg += `\n`;
+    }
+    if (docUrl) msg += `🔗 *آن لائن بل دیکھیں:* ${docUrl}\n\n`;
+    msg += `براہِ کرم ادائیگی کے بعد ٹرانزیکشن رسید شیئر فرمائیں تاکہ کھاتہ کلیئر کیا جا سکے۔ شکریہ! ☀️\n`;
+    msg += `📞 *رابطہ نمبر:* ${settings.phone}`;
+    return msg;
+  }
+
+  if (messageType === 'SHORT_SMS') {
+    let msg = `${shop}: Payment reminder for Inv #${invoice.invoiceNumber} (${invoice.customerName}). Total: ${totalStr}, Paid: ${paidStr}, Balance Due: ${balanceStr}. Due: ${formatDate(invoice.dueDate)}.`;
+    if (settings.bankAccountNumber) {
+      msg += ` Pay: ${settings.bankName} A/C ${settings.bankAccountNumber}.`;
+    }
+    if (docUrl) msg += ` View: ${docUrl}`;
+    msg += ` Ph: ${settings.phone}`;
+    return msg;
+  }
+
+  // Default: FRIENDLY
+  let msg = `☀️ *${shop}* - Friendly Payment Reminder\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+  msg += `Hello *${invoice.customerName}*! Hope you are having a great day. 😊\n\n`;
+  msg += `This is a courteous reminder regarding your solar invoice *#${invoice.invoiceNumber}*.\n\n`;
+  msg += `• *Invoice Total:* ${totalStr}\n`;
+  msg += `• *Paid So Far:* ${paidStr}\n`;
+  msg += `• 📌 *Remaining Due: ${balanceStr}*\n`;
+  msg += `• *Due Date:* ${formatDate(invoice.dueDate)}\n\n`;
+  if (customNote) {
+    msg += `📝 *Note:* ${customNote}\n\n`;
+  }
+  if (settings.bankAccountNumber) {
+    msg += `🏦 *Payment Details:*\n`;
+    msg += `• ${settings.bankName} - Account #: ${settings.bankAccountNumber} (${settings.bankAccountTitle})\n\n`;
+  }
+  if (docUrl) msg += `🔗 *View Full Invoice:* ${docUrl}\n\n`;
+  msg += `Please let us know once transferred so we can record your receipt. Thank you! ☀️\n📞 ${settings.phone}`;
+  return msg;
+};
+
+/**
+ * Build tailored payment received acknowledgment receipt with multiple selectable message types
+ */
+export const buildPaymentReceivedReceiptMessage = (
+  invoice: Invoice,
+  payment: {
+    amount: number;
+    discount?: number;
+    method: string;
+    referenceNo?: string;
+    notes?: string;
+  },
+  settings: ShopSettings,
+  receiptType: PaymentReceiptMessageType = 'OFFICIAL_RECEIPT'
+): string => {
+  const shop = settings.shopName || 'SolarCraft ERP';
+  const currency = settings.currency;
+  const pos = settings.currencyPosition;
+  const receivedStr = formatCurrency(payment.amount, currency, pos);
+  const discountStr = payment.discount && payment.discount > 0 ? formatCurrency(payment.discount, currency, pos) : null;
+  const balanceStr = formatCurrency(invoice.balanceDue, currency, pos);
+  const totalPaidStr = formatCurrency(invoice.paidAmount, currency, pos);
+  const methodLabel = payment.method.replace(/_/g, ' ');
+  const docUrl = getCustomerPortalUrl(invoice.id);
+
+  if (receiptType === 'URDU_RECEIPT') {
+    let msg = `🧾 *رسید برائے وصولی رقم (Official Payment Receipt)*\n`;
+    msg += `*${shop}*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `السلام علیکم محترم *${invoice.customerName}* صاحب!\n\n`;
+    msg += `آپ کی طرف سے رقم کی ادائیگی شکریہ کے ساتھ موصول ہو گئی ہے۔\n\n`;
+    msg += `📋 *وصولی کی تفصیلات (Receipt Details):*\n`;
+    msg += `• انوائس نمبر: *#${invoice.invoiceNumber}*\n`;
+    msg += `• موصول شدہ رقم (Payment Received): *${receivedStr}*\n`;
+    if (discountStr) {
+      msg += `• ڈسکاؤنٹ / رعایت (Discount Granted): *${discountStr}*\n`;
+    }
+    msg += `• تاریخ ادائیگی: ${formatDate(new Date().toISOString().split('T')[0])}\n`;
+    msg += `• طریقہ ادائیگی: ${methodLabel}\n`;
+    if (payment.referenceNo) {
+      msg += `• ٹرانزیکشن ریفرنس / Trx ID: ${payment.referenceNo}\n`;
+    }
+    msg += `\n📊 *کھاتے کی موجودہ صورتحال:*\n`;
+    msg += `• کل موصول شدہ رقم: ${totalPaidStr}\n`;
+    msg += `• *بقیہ واجب الادا بیلنس:* *${balanceStr}*\n`;
+    if (invoice.balanceDue <= 0) {
+      msg += `• اسٹیٹس: ✅ *مکمل حساب بے باک (Paid in Full)* 🎉\n`;
+    }
+    if (payment.notes) {
+      msg += `• ریمارکس: ${payment.notes}\n`;
+    }
+    msg += `\n`;
+    if (docUrl) msg += `🔗 *ڈیجیٹل رسید دیکھیں:* ${docUrl}\n\n`;
+    msg += `ہم پر اعتماد کرنے کا بے حد شکریہ! ☀️\n`;
+    msg += `📞 *اکاؤنٹس ڈیپارٹمنٹ:* ${settings.phone}`;
+    return msg;
+  }
+
+  if (receiptType === 'SHORT_RECEIPT') {
+    let msg = `✅ ${shop}: Received ${receivedStr}`;
+    if (discountStr) {
+      msg += ` [Discount: ${discountStr}]`;
+    }
+    msg += ` for Inv #${invoice.invoiceNumber} from ${invoice.customerName}. Bal Due: ${balanceStr}. Thank you!`;
+    if (docUrl) msg += ` Receipt: ${docUrl}`;
+    msg += ` Ph: ${settings.phone}`;
+    return msg;
+  }
+
+  if (receiptType === 'FULL_SETTLEMENT') {
+    let msg = `🏆 *ACCOUNT 100% SETTLED IN FULL*\n`;
+    msg += `*${shop}*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `Dear *${invoice.customerName}*,\n\n`;
+    msg += `Congratulations! We have received your final payment and your account for *Invoice #${invoice.invoiceNumber}* is now **100% PAID IN FULL**! 🎉☀️\n\n`;
+    msg += `🧾 *FINAL SETTLEMENT SUMMARY:*\n`;
+    msg += `• Final Payment Received: *${receivedStr}*\n`;
+    if (discountStr) {
+      msg += `• Settlement Discount / Waiver: *${discountStr}*\n`;
+    }
+    msg += `• Total Paid on Invoice: ${totalPaidStr}\n`;
+    msg += `• ✅ *Remaining Balance: ${formatCurrency(0, currency, pos)} (Zero Due)*\n`;
+    msg += `• Payment Method: ${methodLabel}\n`;
+    if (payment.referenceNo) {
+      msg += `• Reference / Trx ID: ${payment.referenceNo}\n`;
+    }
+    msg += `\n🛡️ *WARRANTY & SUPPORT STATUS: ACTIVE*\n`;
+    msg += `Your manufacturer warranties, net metering documentation, and after-sales customer care are fully active.\n\n`;
+    if (docUrl) msg += `🔗 *Download Zero-Balance Receipt & Invoice:* ${docUrl}\n\n`;
+    msg += `Thank you for trusting *${shop}* for your solar energy journey!\n`;
+    msg += `📞 *Customer Care:* ${settings.phone}`;
+    return msg;
+  }
+
+  if (receiptType === 'MILESTONE_CONFIRMED') {
+    let msg = `⚡ *SOLAR MILESTONE PAYMENT RECEIVED*\n`;
+    msg += `*${shop}*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `Dear *${invoice.customerName}*,\n\n`;
+    msg += `We have successfully received and verified your project milestone payment! ☀️\n\n`;
+    msg += `📋 *RECEIPT DETAILS:*\n`;
+    msg += `• Invoice Ref: *#${invoice.invoiceNumber}*\n`;
+    msg += `• Milestone Amount Paid: *${receivedStr}*\n`;
+    if (discountStr) {
+      msg += `• Discount Granted: *${discountStr}*\n`;
+    }
+    msg += `• Payment Mode: ${methodLabel}\n`;
+    if (payment.referenceNo) {
+      msg += `• Trx ID: ${payment.referenceNo}\n`;
+    }
+    msg += `• *Remaining Balance Due:* ${balanceStr}\n\n`;
+    msg += `🚀 *NEXT PROJECT STEP:* Equipment allocation & installation phase is moving forward. Our technician team will coordinate with you for on-site dispatch.\n\n`;
+    if (docUrl) msg += `🔗 *Updated Invoice Statement:* ${docUrl}\n\n`;
+    msg += `Best Regards,\n*${shop}*\n📞 ${settings.phone}`;
+    return msg;
+  }
+
+  // Default: OFFICIAL_RECEIPT
+  let msg = `🧾 *OFFICIAL PAYMENT RECEIPT*\n`;
+  msg += `*${shop}*\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+  msg += `Received with thanks from: *${invoice.customerName}*\n\n`;
+  msg += `• *Invoice Number:* #${invoice.invoiceNumber}\n`;
+  msg += `• *Payment Amount Received:* *${receivedStr}*\n`;
+  if (discountStr) {
+    msg += `• *Settlement Discount / Waiver:* *${discountStr}*\n`;
+  }
+  msg += `• *Payment Date:* ${formatDate(new Date().toISOString().split('T')[0])}\n`;
+  msg += `• *Payment Method:* ${methodLabel}\n`;
+  if (payment.referenceNo) {
+    msg += `• *Transaction Reference:* ${payment.referenceNo}\n`;
+  }
+  msg += `\n📊 *CURRENT ACCOUNT STATUS:*\n`;
+  msg += `• Total Paid To Date: ${totalPaidStr}\n`;
+  msg += `• *Current Balance Remaining:* *${balanceStr}*\n`;
+  if (invoice.balanceDue <= 0) {
+    msg += `• Status: ✅ *PAID IN FULL*\n`;
+  }
+  if (payment.notes) {
+    msg += `• Remarks: ${payment.notes}\n`;
+  }
+  msg += `\n`;
+  if (docUrl) msg += `🔗 *Official Digital Receipt & Statement:* ${docUrl}\n\n`;
+  msg += `Thank you for your business! ☀️\n`;
+  msg += `📞 *Accounts Department:* ${settings.phone}`;
   return msg;
 };
 

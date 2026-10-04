@@ -15,9 +15,10 @@ import {
   Building2,
   FileText
 } from 'lucide-react';
-import { Invoice, ShopSettings } from '../../types/solar';
+import { Invoice, ShopSettings, PaymentRequestMessageType } from '../../types/solar';
 import { 
   buildWhatsAppMessage, 
+  buildPaymentRequestMessage,
   buildEmailSubject, 
   buildEmailBody, 
   buildSmsMessage,
@@ -59,12 +60,24 @@ export const SendDirectModal: React.FC<SendDirectModalProps> = ({
   
   // Copy feedback states
   const [copiedType, setCopiedType] = useState<string | null>(null);
+  const [waTemplate, setWaTemplate] = useState<string>('SUMMARY');
+
+  const handleSelectWaTemplate = (type: string) => {
+    if (!invoice) return;
+    setWaTemplate(type);
+    if (type === 'SUMMARY') {
+      setCustomWhatsAppText(buildWhatsAppMessage(invoice, settings));
+    } else {
+      setCustomWhatsAppText(buildPaymentRequestMessage(invoice, settings, type as PaymentRequestMessageType));
+    }
+  };
 
   useEffect(() => {
     if (invoice && isOpen) {
       setPhone(invoice.customerPhone || '');
       setEmail(invoice.customerEmail || '');
       setSubject(buildEmailSubject(invoice, settings));
+      setWaTemplate('SUMMARY');
       setCustomWhatsAppText(buildWhatsAppMessage(invoice, settings));
       setCustomEmailBody(buildEmailBody(invoice, settings));
       setCustomSmsText(buildSmsMessage(invoice, settings));
@@ -230,14 +243,14 @@ export const SendDirectModal: React.FC<SendDirectModalProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1.5">
                   <label className="text-[10px] font-bold uppercase text-slate-500">
-                    WhatsApp Message Preview & Editor
+                    Message Type & Template:
                   </label>
                   <button
                     type="button"
                     onClick={() => handleCopy(customWhatsAppText, 'wa')}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800"
+                    className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer self-start sm:self-auto"
                   >
                     {copiedType === 'wa' ? (
                       <>
@@ -250,6 +263,87 @@ export const SendDirectModal: React.FC<SendDirectModalProps> = ({
                         <span>Copy Message Text</span>
                       </>
                     )}
+                  </button>
+                </div>
+
+                {/* Template Selector Pills */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWaTemplate('SUMMARY')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      waTemplate === 'SUMMARY'
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-white text-emerald-900 border border-emerald-200 hover:bg-emerald-50'
+                    }`}
+                  >
+                    📋 Invoice Breakdown
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWaTemplate('FRIENDLY')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      waTemplate === 'FRIENDLY'
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-white text-emerald-900 border border-emerald-200 hover:bg-emerald-50'
+                    }`}
+                  >
+                    🌿 Friendly Reminder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWaTemplate('COMMERCIAL')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      waTemplate === 'COMMERCIAL'
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-white text-emerald-900 border border-emerald-200 hover:bg-emerald-50'
+                    }`}
+                  >
+                    💼 Commercial & Bank
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWaTemplate('SOLAR_MILESTONE')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      waTemplate === 'SOLAR_MILESTONE'
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-white text-emerald-900 border border-emerald-200 hover:bg-emerald-50'
+                    }`}
+                  >
+                    ⚡ Solar Milestone
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWaTemplate('URDU_ENG')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      waTemplate === 'URDU_ENG'
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-white text-emerald-900 border border-emerald-200 hover:bg-emerald-50'
+                    }`}
+                  >
+                    🇵🇰 Urdu یاددہانی
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWaTemplate('URGENT')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      waTemplate === 'URGENT'
+                        ? 'bg-rose-700 text-white shadow-xs'
+                        : 'bg-white text-rose-800 border border-rose-200 hover:bg-rose-50'
+                    }`}
+                  >
+                    🚨 Urgent Overdue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWaTemplate('SHORT_SMS')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      waTemplate === 'SHORT_SMS'
+                        ? 'bg-slate-800 text-white shadow-xs'
+                        : 'bg-white text-slate-800 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    📱 Short Text
                   </button>
                 </div>
 

@@ -20,6 +20,7 @@ import {
   ShopSettings, 
   TabType,
   PaymentMethod,
+  PaymentRecord,
   StockMovement,
   UserRole
 } from './types/solar';
@@ -705,38 +706,112 @@ export function App() {
     amount: number,
     method: PaymentMethod,
     referenceNo: string,
-    notes: string
+    notes: string,
+    discount: number = 0
   ) => {
-    const updatedInvoices = invoices.map((inv) => {
-      if (inv.id !== invoiceId) return inv;
+    const paidVal = Math.max(0, Number(amount) || 0);
+    const discountVal = Math.max(0, Number(discount) || 0);
+    const totalCredit = Number((paidVal + discountVal).toFixed(2));
 
-      const newPaid = Number((inv.paidAmount + amount).toFixed(2));
-      const newBalance = Math.max(0, Number((inv.grandTotal - newPaid).toFixed(2)));
-      const newStatus = newBalance === 0 ? 'PAID' : 'PARTIAL';
+    const existingInv = invoices.find((inv) => inv.id === invoiceId);
+    let updatedInvoices: Invoice[];
 
-      const newPayment = {
+    if (existingInv) {
+      updatedInvoices = invoices.map((inv) => {
+        if (inv.id !== invoiceId) return inv;
+
+        const newPaid = Number((inv.paidAmount + paidVal).toFixed(2));
+        const newSettlementDiscounts = Number(((inv.settlementDiscountTotal || 0) + discountVal).toFixed(2));
+
+        // Balance due is reduced by both cash paid and settlement discount granted
+        const newBalance = Math.max(0, Number((inv.balanceDue - totalCredit).toFixed(2)));
+        const newStatus = newBalance === 0 ? 'PAID' : 'PARTIAL';
+
+        const newPayment: PaymentRecord = {
+          id: `pay-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          date: new Date().toISOString().split('T')[0],
+          amount: paidVal,
+          discount: discountVal > 0 ? discountVal : undefined,
+          method,
+          referenceNo,
+          notes,
+          recordedBy: currentRole,
+        };
+
+        const updated: Invoice = {
+          ...inv,
+          paidAmount: newPaid,
+          balanceDue: newBalance,
+          settlementDiscountTotal: newSettlementDiscounts,
+          status: newStatus as any,
+          payments: [...(inv.payments || []), newPayment],
+          updatedAt: new Date().toISOString(),
+        };
+
+        if (printingInvoice?.id === invoiceId) {
+          setPrintingInvoice(updated);
+        }
+        return updated;
+      });
+    } else {
+      // Fallback for direct customer ledger payment or opening balance
+      const targetCustId = invoiceId.replace('inv-ledger-', '');
+      const cust = customers.find(c => c.id === targetCustId);
+      const initialBalance = cust ? (cust.balanceDue || totalCredit) : totalCredit;
+      const newBalance = Math.max(0, Number((initialBalance - totalCredit).toFixed(2)));
+
+      const newPayment: PaymentRecord = {
         id: `pay-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         date: new Date().toISOString().split('T')[0],
-        amount,
+        amount: paidVal,
+        discount: discountVal > 0 ? discountVal : undefined,
         method,
         referenceNo,
         notes,
+        recordedBy: currentRole,
       };
 
-      const updated = {
-        ...inv,
-        paidAmount: newPaid,
+      const ledgerInv: Invoice = {
+        id: invoiceId,
+        invoiceNumber: `REC-${Date.now().toString().slice(-6)}`,
+        type: 'INVOICE',
+        customerId: targetCustId,
+        customerName: cust?.name || 'Customer Account',
+        customerPhone: cust?.phone,
+        customerEmail: cust?.email,
+        customerAddress: cust?.address,
+        customerCity: cust?.city,
+        date: new Date().toISOString().split('T')[0],
+        dueDate: new Date().toISOString().split('T')[0],
+        items: [
+          {
+            id: `item-${Date.now()}`,
+            description: 'Customer Account Balance Settlement',
+            quantity: 1,
+            unitPrice: initialBalance,
+            unit: 'Job',
+            discountPercent: 0,
+            total: initialBalance,
+            category: 'SERVICES_LABOR',
+          }
+        ],
+        subtotal: initialBalance,
+        taxPercent: 0,
+        taxAmount: 0,
+        shippingOrFreight: 0,
+        installationCharge: 0,
+        discountTotal: 0,
+        settlementDiscountTotal: discountVal,
+        grandTotal: initialBalance,
+        paidAmount: paidVal,
         balanceDue: newBalance,
-        status: newStatus as any,
-        payments: [...(inv.payments || []), newPayment],
+        status: newBalance === 0 ? 'PAID' : 'PARTIAL',
+        payments: [newPayment],
+        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-
-      if (printingInvoice?.id === invoiceId) {
-        setPrintingInvoice(updated);
-      }
-      return updated;
-    });
+      updatedInvoices = [ledgerInv, ...invoices];
+    }
 
     // Immediately recalculate customer balance totals
     const updatedCustomers = customers.map((cust) => {
@@ -1303,6 +1378,10 @@ export function App() {
                   onPrintCustomerStatement={(cust) => {
                     setPrintingCustomerStatement(cust);
                   }}
+                  onRecordPayment={(inv) => {
+                    setPaymentInvoice(inv);
+                    setIsPaymentModalOpen(true);
+                  }}
                   onOpenInvoiceForCustomer={(cust) => {
                     const newInv: Partial<Invoice> = {
                       customerId: cust.id,
@@ -1499,6 +1578,11 @@ export function App() {
           setIsCustomerDetailOpen(false);
           setPrintingCustomerStatement(cust);
         }}
+        onOpenRecordPayment={(inv) => {
+          setIsCustomerDetailOpen(false);
+          setPaymentInvoice(inv);
+          setIsPaymentModalOpen(true);
+        }}
       />
 
       {/* Expense Editor Modal */}
@@ -1526,6 +1610,7 @@ export function App() {
         existingProduct={editingProduct}
         prefillCode={productEditorPrefillCode}
         settings={settings}
+        onUpdateSettings={(newSettings) => setSettings(newSettings)}
         currentRole={currentRole}
       />
 

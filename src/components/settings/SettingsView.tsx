@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   Save, 
@@ -56,6 +56,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [copiedPartnerLink, setCopiedPartnerLink] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
 
+  // Keep form data in sync if settings update from external changes or cloud
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      ...settings,
+      customCategories: settings.customCategories || prev.customCategories || ['EV_CHARGERS', 'SOLAR_LIGHTS', 'SOLAR_WATER_HEATERS'],
+    }));
+  }, [settings]);
+
   const partnerLink = `${window.location.origin}${window.location.pathname}?role=partner`;
 
   const handleChange = (field: keyof ShopSettings, value: any) => {
@@ -85,8 +94,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const existing = formData.customCategories || [];
     if (!existing.includes(cleanKey) && !DEFAULT_CATEGORY_LABELS[cleanKey]) {
       const updated = [...existing, cleanKey];
-      handleChange('customCategories', updated);
+      const updatedSettings = { ...formData, customCategories: updated };
+      setFormData(updatedSettings);
+      onSaveSettings(updatedSettings);
       setNewCategoryInput('');
+      setSaveMessage(`Category "${cleanKey.replace(/_/g, ' ')}" added and saved successfully!`);
+      setTimeout(() => setSaveMessage(''), 3000);
     } else {
       alert('This category already exists!');
     }
@@ -94,7 +107,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleRemoveCustomCategory = (catToRemove: string) => {
     const updated = (formData.customCategories || []).filter((c) => c !== catToRemove);
-    handleChange('customCategories', updated);
+    const updatedSettings = { ...formData, customCategories: updated };
+    setFormData(updatedSettings);
+    onSaveSettings(updatedSettings);
+    setSaveMessage(`Category "${catToRemove.replace(/_/g, ' ')}" removed and saved.`);
+    setTimeout(() => setSaveMessage(''), 3000);
   };
 
   const handleExportBackup = () => {

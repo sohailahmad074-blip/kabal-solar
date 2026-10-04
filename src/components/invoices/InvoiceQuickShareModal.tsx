@@ -9,11 +9,17 @@ import {
   X, 
   ExternalLink,
   Phone,
-  FileText
+  FileText,
+  ChevronDown
 } from 'lucide-react';
-import { Invoice, ShopSettings } from '../../types/solar';
+import { Invoice, ShopSettings, PaymentRequestMessageType } from '../../types/solar';
 import { formatCurrency } from '../../utils/formatters';
-import { buildWhatsAppMessage, openWhatsApp, sanitizePhoneNumber } from '../../utils/sendDirect';
+import { 
+  buildWhatsAppMessage, 
+  buildPaymentRequestMessage,
+  openWhatsApp, 
+  sanitizePhoneNumber 
+} from '../../utils/sendDirect';
 
 interface InvoiceQuickShareModalProps {
   isOpen: boolean;
@@ -23,6 +29,8 @@ interface InvoiceQuickShareModalProps {
   onViewPrint?: (invoice: Invoice) => void;
   onOpenSendSuite?: (invoice: Invoice) => void;
 }
+
+type QuickShareMessageType = 'FULL_DOC' | PaymentRequestMessageType;
 
 export const InvoiceQuickShareModal: React.FC<InvoiceQuickShareModalProps> = ({
   isOpen,
@@ -34,33 +42,40 @@ export const InvoiceQuickShareModal: React.FC<InvoiceQuickShareModalProps> = ({
 }) => {
   const [phone, setPhone] = useState('');
   const [copied, setCopied] = useState(false);
+  const [selectedMessageType, setSelectedMessageType] = useState<QuickShareMessageType>('FULL_DOC');
+  const [customMessageText, setCustomMessageText] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     if (invoice && isOpen) {
       setPhone(invoice.customerPhone || '');
       setCopied(false);
+      if (selectedMessageType === 'FULL_DOC') {
+        setCustomMessageText(buildWhatsAppMessage(invoice, settings));
+      } else {
+        setCustomMessageText(buildPaymentRequestMessage(invoice, settings, selectedMessageType));
+      }
     }
-  }, [invoice, isOpen]);
+  }, [invoice, isOpen, selectedMessageType, settings]);
 
   if (!isOpen || !invoice) return null;
 
   const isQuote = invoice.type === 'QUOTATION' || invoice.type === 'PROFORMA';
   const docLabel = isQuote ? 'Quotation' : 'Invoice';
-  const whatsappMessage = buildWhatsAppMessage(invoice, settings);
 
   const handleShareWhatsApp = () => {
-    openWhatsApp(phone || invoice.customerPhone || '', whatsappMessage);
+    openWhatsApp(phone || invoice.customerPhone || '', customMessageText);
   };
 
   const handleCopyMessage = () => {
-    navigator.clipboard.writeText(whatsappMessage);
+    navigator.clipboard.writeText(customMessageText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
+      <div className="relative w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl my-auto">
         {/* Close button */}
         <button
           type="button"
@@ -71,7 +86,7 @@ export const InvoiceQuickShareModal: React.FC<InvoiceQuickShareModalProps> = ({
         </button>
 
         {/* Success Header */}
-        <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+        <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
             <CheckCircle2 className="h-6 w-6" />
           </div>
@@ -86,7 +101,7 @@ export const InvoiceQuickShareModal: React.FC<InvoiceQuickShareModalProps> = ({
         </div>
 
         {/* Invoice Summary Card */}
-        <div className="my-4 rounded-lg bg-slate-50 p-3.5 border border-slate-200/80 space-y-2 text-xs">
+        <div className="my-3 rounded-lg bg-slate-50 p-3 border border-slate-200/80 space-y-2 text-xs">
           <div className="flex justify-between items-center text-slate-600">
             <span>Customer:</span>
             <span className="font-bold text-slate-900">{invoice.customerName}</span>
@@ -98,6 +113,13 @@ export const InvoiceQuickShareModal: React.FC<InvoiceQuickShareModalProps> = ({
               {formatCurrency(invoice.grandTotal, settings.currency, settings.currencyPosition)}
             </span>
           </div>
+
+          {invoice.discountTotal > 0 && (
+            <div className="flex justify-between items-center text-emerald-700 font-semibold text-[11px]">
+              <span>Discount Granted:</span>
+              <span>-{formatCurrency(invoice.discountTotal, settings.currency, settings.currencyPosition)}</span>
+            </div>
+          )}
 
           {invoice.balanceDue > 0 ? (
             <div className="flex justify-between items-center text-rose-600 font-semibold">
@@ -134,6 +156,115 @@ export const InvoiceQuickShareModal: React.FC<InvoiceQuickShareModalProps> = ({
           </div>
         </div>
 
+        {/* Message Type Selection for Sharing & Payment Reminders */}
+        <div className="mb-3 space-y-1.5">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+            <span>Select WhatsApp Message Format:</span>
+            <span className="text-[10px] text-emerald-700 font-semibold">
+              {selectedMessageType === 'FULL_DOC' ? 'Full Breakdown' : `${selectedMessageType.replace(/_/g, ' ')} Request`}
+            </span>
+          </label>
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={() => setSelectedMessageType('FULL_DOC')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                selectedMessageType === 'FULL_DOC'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              📄 Full Invoice
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedMessageType('FRIENDLY')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                selectedMessageType === 'FRIENDLY'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              🌿 Friendly
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedMessageType('COMMERCIAL')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                selectedMessageType === 'COMMERCIAL'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              💼 Bank & Due Date
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedMessageType('SOLAR_MILESTONE')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                selectedMessageType === 'SOLAR_MILESTONE'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              ⚡ Milestone
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedMessageType('URDU_ENG')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                selectedMessageType === 'URDU_ENG'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              🇵🇰 Urdu یاددہانی
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedMessageType('URGENT')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                selectedMessageType === 'URGENT'
+                  ? 'bg-rose-700 text-white shadow-2xs'
+                  : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+              }`}
+            >
+              🚨 Urgent Due
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedMessageType('SHORT_SMS')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                selectedMessageType === 'SHORT_SMS'
+                  ? 'bg-slate-700 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              📱 Short Text
+            </button>
+          </div>
+
+          {/* Toggle Editable Message Preview */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setShowPreview(!showPreview)}
+              className="text-[10px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+            >
+              <ChevronDown className={`h-3 w-3 transition-transform ${showPreview ? 'rotate-180' : ''}`} />
+              <span>{showPreview ? 'Hide Message Preview' : 'Show / Edit Message Text'}</span>
+            </button>
+            {showPreview && (
+              <textarea
+                rows={5}
+                value={customMessageText}
+                onChange={(e) => setCustomMessageText(e.target.value)}
+                className="mt-1.5 w-full rounded border border-slate-200 bg-slate-50 p-2 text-[10px] font-mono leading-relaxed text-slate-800 focus:bg-white focus:border-emerald-500 focus:outline-none"
+              />
+            )}
+          </div>
+        </div>
+
         {/* Primary Action: 1-Click WhatsApp Share */}
         <div className="space-y-2">
           <button
@@ -142,7 +273,7 @@ export const InvoiceQuickShareModal: React.FC<InvoiceQuickShareModalProps> = ({
             className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 px-4 text-xs font-bold text-white shadow-md hover:bg-emerald-700 active:scale-[0.99] transition-all cursor-pointer"
           >
             <MessageSquare className="h-4 w-4" />
-            <span>Share with Client via WhatsApp</span>
+            <span>Share via WhatsApp</span>
             <ExternalLink className="h-3.5 w-3.5 opacity-80" />
           </button>
 
