@@ -22,6 +22,7 @@ interface NavbarProps {
   setActiveTab?: (tab: any) => void;
   currentRole?: UserRole;
   onOpenRoleSwitch?: () => void;
+  onLockSoftware?: () => void;
   onOpenEstimator?: () => void;
   onOpenNewInvoice?: () => void;
   onOpenNewPO?: () => void;
@@ -41,6 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   settings,
   currentRole = 'OWNER',
   onOpenRoleSwitch,
+  onLockSoftware,
   onOpenEstimator,
   onOpenNewInvoice,
   onOpenNewPO,
@@ -109,6 +111,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="sm:hidden">Owner</span>
               </>
             )}
+          </button>
+        )}
+
+        {/* Lock Software Button */}
+        {onLockSoftware && (
+          <button
+            type="button"
+            onClick={onLockSoftware}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-slate-700 hover:text-rose-700 transition-all cursor-pointer shadow-2xs"
+            title="Lock Private Software (Requires PIN to re-enter)"
+          >
+            <Lock className="h-3.5 w-3.5 text-slate-500 hover:text-rose-600" />
+            <span className="hidden md:inline">Lock ERP</span>
           </button>
         )}
 

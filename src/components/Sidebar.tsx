@@ -31,6 +31,7 @@ interface SidebarProps {
   expenseCount?: number;
   currentRole?: UserRole;
   onOpenRoleSwitch?: () => void;
+  onLockSoftware?: () => void;
   settings?: ShopSettings;
   onOpenBarcodeScanner?: (mode?: 'STOCK_IN' | 'STOCK_OUT' | 'LOG' | 'LABELS') => void;
   onOpenSecretProfit?: () => void;
@@ -46,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingInvoicesCount = 0,
   currentRole = 'OWNER',
   onOpenRoleSwitch,
+  onLockSoftware,
   settings,
   onOpenBarcodeScanner,
   onOpenSecretProfit,
@@ -204,16 +206,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <p className="text-[9px] text-blue-300 truncate">Inventory & POs</p>
               </div>
             </div>
-            {onOpenRoleSwitch && (
-              <button
-                type="button"
-                onClick={onOpenRoleSwitch}
-                className="text-[9px] font-bold bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition-colors shrink-0 cursor-pointer"
-                title="Switch to Owner with PIN"
-              >
-                Unlock
-              </button>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {onLockSoftware && (
+                <button
+                  type="button"
+                  onClick={onLockSoftware}
+                  className="text-[9px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-1.5 py-1 rounded transition-colors cursor-pointer flex items-center gap-0.5"
+                  title="Lock Software"
+                >
+                  <Lock className="h-2.5 w-2.5" />
+                  <span>Lock</span>
+                </button>
+              )}
+              {onOpenRoleSwitch && (
+                <button
+                  type="button"
+                  onClick={onOpenRoleSwitch}
+                  className="text-[9px] font-bold bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition-colors shrink-0 cursor-pointer"
+                  title="Switch to Owner with PIN"
+                >
+                  Unlock
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="bg-slate-800/80 border border-slate-700/60 rounded-lg p-2 flex items-center justify-between gap-1.5">
@@ -224,16 +239,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <p className="text-[9px] text-slate-400 truncate">{settings?.ownerName || 'Full Access'}</p>
               </div>
             </div>
-            {onOpenRoleSwitch && (
-              <button
-                type="button"
-                onClick={onOpenRoleSwitch}
-                className="text-[9px] font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1 rounded transition-colors shrink-0 cursor-pointer"
-                title="Manage Partner & Team Access"
-              >
-                Roles
-              </button>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {onLockSoftware && (
+                <button
+                  type="button"
+                  onClick={onLockSoftware}
+                  className="text-[9px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-1.5 py-1 rounded transition-colors shrink-0 cursor-pointer flex items-center gap-0.5"
+                  title="Lock Software (Private Mode)"
+                >
+                  <Lock className="h-2.5 w-2.5" />
+                  <span>Lock</span>
+                </button>
+              )}
+              {onOpenRoleSwitch && (
+                <button
+                  type="button"
+                  onClick={onOpenRoleSwitch}
+                  className="text-[9px] font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1 rounded transition-colors shrink-0 cursor-pointer"
+                  title="Manage Partner & Team Access"
+                >
+                  Roles
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -394,16 +422,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {onOpenRoleSwitch && (
-            <button
-              type="button"
-              onClick={onOpenRoleSwitch}
-              className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
-              title="Switch User Role"
-            >
-              <Users className="h-3.5 w-3.5" />
-            </button>
-          )}
+          <div className="flex items-center gap-1">
+            {onOpenRoleSwitch && (
+              <button
+                type="button"
+                onClick={onOpenRoleSwitch}
+                className="p-1.5 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Switch User Role"
+              >
+                <Users className="h-3.5 w-3.5" />
+              </button>
+            )}
+
+            {onLockSoftware && (
+              <button
+                type="button"
+                onClick={onLockSoftware}
+                className="p-1.5 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                title="Lock Private System (Exit to Lock Screen)"
+              >
+                <Lock className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </aside>

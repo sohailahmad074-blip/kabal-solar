@@ -35,7 +35,7 @@ import { InvoiceEditor } from './components/invoices/InvoiceEditor';
 import { InvoicePrintView } from './components/invoices/InvoicePrintView';
 import { RecordPaymentModal } from './components/invoices/RecordPaymentModal';
 import { SendDirectModal } from './components/invoices/SendDirectModal';
-import { CustomerPortalView } from './components/invoices/CustomerPortalView';
+import { PrivateLockScreen } from './components/auth/PrivateLockScreen';
 import { InvoiceQuickShareModal } from './components/invoices/InvoiceQuickShareModal';
 
 import { PurchasingList } from './components/purchasing/PurchasingList';
@@ -80,6 +80,17 @@ import {
 } from './services/cloudSync';
 
 export function App() {
+  // Software Privacy & Lock Screen state (Strict Private Mode)
+  const [isPrivateLocked, setIsPrivateLocked] = useState<boolean>(() => {
+    try {
+      const isSessionUnlocked = sessionStorage.getItem('solarcraft_erp_unlocked') === 'true';
+      const isDeviceRemembered = localStorage.getItem('solarcraft_erp_unlocked') === 'true';
+      return !(isSessionUnlocked || isDeviceRemembered);
+    } catch {
+      return true;
+    }
+  });
+
   // User Role & Access State (Owner vs Partner)
   const [currentRole, setCurrentRole] = useState<UserRole>(() => {
     try {
@@ -95,6 +106,26 @@ export function App() {
     return 'OWNER';
   });
   const [isRoleSwitchModalOpen, setIsRoleSwitchModalOpen] = useState(false);
+
+  const handleUnlockSoftware = (role: UserRole, remember: boolean) => {
+    setCurrentRole(role);
+    setIsPrivateLocked(false);
+    try {
+      sessionStorage.setItem('solarcraft_erp_unlocked', 'true');
+      if (remember) {
+        localStorage.setItem('solarcraft_erp_unlocked', 'true');
+      }
+      localStorage.setItem('solarcraft_active_role', role);
+    } catch {}
+  };
+
+  const handleLockSoftware = () => {
+    try {
+      sessionStorage.removeItem('solarcraft_erp_unlocked');
+      localStorage.removeItem('solarcraft_erp_unlocked');
+    } catch {}
+    setIsPrivateLocked(true);
+  };
 
   // Main Navigation state (defaults to INVENTORY if Partner)
   const [activeTab, setActiveTab] = useState<TabType>(() => {
@@ -369,26 +400,9 @@ export function App() {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, []);
 
-  // Direct Customer Sharing & Portal states
+  // Direct Customer Sharing states (Private Mode - No web portal links)
   const [isSendDirectOpen, setIsSendDirectOpen] = useState(false);
   const [sendDirectInvoice, setSendDirectInvoice] = useState<Invoice | null>(null);
-  const [customerPortalInvoice, setCustomerPortalInvoice] = useState<Invoice | null>(null);
-
-  // Check URL params for direct customer portal link
-  useEffect(() => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const docId = urlParams.get('doc');
-      if (docId) {
-        const found = invoices.find((i) => i.id === docId || i.invoiceNumber.toLowerCase() === docId.toLowerCase());
-        if (found) {
-          setCustomerPortalInvoice(found);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, [invoices]);
 
   // Synchronize states to localStorage
   useEffect(() => {
@@ -1161,6 +1175,16 @@ export function App() {
   ).length;
   const pendingInvoicesCount = invoices.filter((i) => i.balanceDue > 0).length;
 
+  // Strict Private Mode Guard - Requires PIN Unlock to Access Software
+  if (isPrivateLocked) {
+    return (
+      <PrivateLockScreen
+        settings={settings}
+        onUnlock={handleUnlockSoftware}
+      />
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100 antialiased font-sans selection:bg-amber-500 selection:text-slate-950">
       {/* Sidebar Navigation */}
@@ -1174,6 +1198,7 @@ export function App() {
         pendingInvoicesCount={pendingInvoicesCount}
         currentRole={currentRole}
         onOpenRoleSwitch={() => setIsRoleSwitchModalOpen(true)}
+        onLockSoftware={handleLockSoftware}
         settings={settings}
         onOpenBarcodeScanner={handleOpenBarcodeScanner}
         onOpenSecretProfit={() => setIsSecretProfitOpen(true)}
@@ -1189,6 +1214,7 @@ export function App() {
           settings={settings}
           currentRole={currentRole}
           onOpenRoleSwitch={() => setIsRoleSwitchModalOpen(true)}
+          onLockSoftware={handleLockSoftware}
           onOpenEstimator={() => setActiveTab('ESTIMATOR')}
           onOpenNewInvoice={() => {
             setEditingInvoice(null);
@@ -1242,25 +1268,7 @@ export function App() {
 
         {/* Dynamic Main Body Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {customerPortalInvoice ? (
-            /* Customer Document Portal Direct Web View */
-            <CustomerPortalView
-              invoice={customerPortalInvoice}
-              settings={settings}
-              isAdmin={true}
-              onBackToAdmin={() => {
-                setCustomerPortalInvoice(null);
-                // Clean up query param if present
-                try {
-                  const url = new URL(window.location.href);
-                  url.searchParams.delete('doc');
-                  window.history.replaceState({}, '', url.toString());
-                } catch {
-                  // ignore
-                }
-              }}
-            />
-          ) : printingCustomerStatement ? (
+          {printingCustomerStatement ? (
             /* Dedicated High-Fidelity Customer Total Record & Statement Printable View */
             <CustomerStatementPrintView
               customer={printingCustomerStatement}
@@ -1465,6 +1473,7 @@ export function App() {
                   onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
                   onOpenGitHub={() => setIsGitHubModalOpen(true)}
                   onSwitchRole={handleSelectRole}
+                  onLockSoftware={handleLockSoftware}
                 />
               )}
             </>
@@ -1634,7 +1643,7 @@ export function App() {
         initialMode={barcodeScannerInitialMode}
       />
 
-      {/* Direct Customer Sharing Suite (WhatsApp, Email, SMS, Web Portal) */}
+      {/* Direct Customer Sharing Suite (WhatsApp, Email, SMS - Private Mode) */}
       <SendDirectModal
         isOpen={isSendDirectOpen}
         onClose={() => {
@@ -1643,10 +1652,6 @@ export function App() {
         }}
         invoice={sendDirectInvoice}
         settings={settings}
-        onOpenCustomerPortal={(inv) => {
-          setIsSendDirectOpen(false);
-          setCustomerPortalInvoice(inv);
-        }}
       />
 
       {/* Immediate Post-Creation WhatsApp Quick Share Prompt */}

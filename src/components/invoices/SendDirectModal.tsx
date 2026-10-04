@@ -22,7 +22,6 @@ import {
   buildEmailSubject, 
   buildEmailBody, 
   buildSmsMessage,
-  getCustomerPortalUrl,
   openWhatsApp,
   openMailto,
   openGmailWeb,
@@ -36,17 +35,15 @@ interface SendDirectModalProps {
   onClose: () => void;
   invoice: Invoice | null;
   settings: ShopSettings;
-  onOpenCustomerPortal?: (invoice: Invoice) => void;
 }
 
-type SendTab = 'WHATSAPP' | 'EMAIL' | 'SMS' | 'LINK';
+type SendTab = 'WHATSAPP' | 'EMAIL' | 'SMS';
 
 export const SendDirectModal: React.FC<SendDirectModalProps> = ({
   isOpen,
   onClose,
   invoice,
   settings,
-  onOpenCustomerPortal,
 }) => {
   const [activeTab, setActiveTab] = useState<SendTab>('WHATSAPP');
   
@@ -87,7 +84,6 @@ export const SendDirectModal: React.FC<SendDirectModalProps> = ({
 
   if (!isOpen || !invoice) return null;
 
-  const portalUrl = getCustomerPortalUrl(invoice.id);
   const isQuote = invoice.type === 'QUOTATION' || invoice.type === 'PROFORMA';
   const docLabel = isQuote ? 'Quotation' : 'Invoice';
 
@@ -117,8 +113,11 @@ export const SendDirectModal: React.FC<SendDirectModalProps> = ({
                   {invoice.invoiceNumber}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">
-                Direct dispatch via WhatsApp, Email, SMS, or shareable customer web portal
+              <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                <span>🔒 Private Dispatch via WhatsApp, Email & SMS</span>
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 font-semibold">
+                  Zero software/portal links shared
+                </span>
               </p>
             </div>
           </div>
@@ -205,19 +204,6 @@ export const SendDirectModal: React.FC<SendDirectModalProps> = ({
           >
             <Smartphone className="h-3.5 w-3.5 text-amber-600" />
             <span>SMS / Text</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('LINK')}
-            className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-bold transition-colors cursor-pointer ${
-              activeTab === 'LINK'
-                ? 'border-purple-500 text-purple-700 bg-purple-50/50 rounded-t'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Globe className="h-3.5 w-3.5 text-purple-600" />
-            <span>Customer Web Link</span>
           </button>
         </div>
 
@@ -586,80 +572,6 @@ export const SendDirectModal: React.FC<SendDirectModalProps> = ({
                     <span>Send SMS</span>
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* CUSTOMER WEB PORTAL LINK TAB */}
-          {activeTab === 'LINK' && (
-            <div className="space-y-3">
-              <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-3">
-                <div className="flex items-start gap-2.5">
-                  <Globe className="h-5 w-5 text-purple-600 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-xs text-purple-900">
-                      Live Customer Access Link
-                    </h4>
-                    <p className="text-[11px] text-purple-800">
-                      Customers opening this link see a clean, professional web document with full technical equipment specs, payment banking details, and one-click PDF printing.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase text-slate-500">
-                  Customer Document Web URL
-                </label>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={portalUrl}
-                    className="w-full rounded border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-xs text-slate-700 font-mono select-all focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(portalUrl, 'link')}
-                    className="flex shrink-0 items-center gap-1.5 rounded bg-purple-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-purple-700 transition-colors"
-                  >
-                    {copiedType === 'link' ? (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>Copy Link</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Customer Portal Preview Action */}
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3 mt-2">
-                <div>
-                  <p className="font-bold text-slate-800 text-xs">Customer Portal Preview</p>
-                  <p className="text-[11px] text-slate-500">Preview exactly how the customer will see this document on mobile/desktop.</p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    if (onOpenCustomerPortal) {
-                      onOpenCustomerPortal(invoice);
-                    } else {
-                      window.open(portalUrl, '_blank');
-                    }
-                  }}
-                  className="flex items-center gap-1.5 rounded bg-slate-900 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-slate-800 transition-colors"
-                >
-                  <ExternalLink className="h-3.5 w-3.5 text-amber-400" />
-                  <span>View Customer Portal</span>
-                </button>
               </div>
             </div>
           )}

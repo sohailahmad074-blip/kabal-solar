@@ -34,6 +34,7 @@ interface SettingsViewProps {
   onOpenCloudSync?: () => void;
   onOpenGitHub?: () => void;
   onSwitchRole?: (role: UserRole) => void;
+  onLockSoftware?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -45,6 +46,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onOpenCloudSync,
   onOpenGitHub,
   onSwitchRole,
+  onLockSoftware,
 }) => {
   const [formData, setFormData] = useState<ShopSettings>({ 
     ...settings,
@@ -328,8 +330,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 placeholder="7788"
                 className="mt-1 w-full rounded border border-amber-300 bg-white px-2.5 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
               />
-              <p className="text-[10px] text-slate-500 mt-0.5">Master PIN to return to Owner Admin.</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Master PIN to unlock full Owner Admin.</p>
             </div>
+          </div>
+
+          {/* Software Privacy Status & Lock Now */}
+          <div className="mt-2 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-amber-700 shrink-0" />
+              <div>
+                <span className="font-bold text-slate-900 text-xs block">
+                  🔒 Private Software Protection Active
+                </span>
+                <span className="text-[10px] text-slate-600">
+                  All client ledgers, invoices, and financial records require PIN authentication.
+                </span>
+              </div>
+            </div>
+
+            {onLockSoftware && (
+              <button
+                type="button"
+                onClick={onLockSoftware}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold rounded-lg text-xs shadow-xs transition-colors shrink-0 cursor-pointer self-start sm:self-auto"
+              >
+                <Lock className="h-3.5 w-3.5" />
+                <span>Lock Software Now</span>
+              </button>
+            )}
           </div>
 
           {/* Shareable Partner Link */}

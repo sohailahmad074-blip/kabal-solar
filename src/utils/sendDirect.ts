@@ -8,16 +8,6 @@ import {
 import { formatCurrency, formatDate } from './formatters';
 
 /**
- * Generate a direct customer document portal URL
- */
-export const getCustomerPortalUrl = (invoiceId: string): string => {
-  if (typeof window === 'undefined') return '';
-  const url = new URL(window.location.href);
-  url.searchParams.set('doc', invoiceId);
-  return url.toString();
-};
-
-/**
  * Clean and format any phone number into full international WhatsApp digits.
  * Automatically handles Pakistan (+92) local phone numbers:
  * - 03001234567 -> 923001234567
@@ -85,8 +75,6 @@ export const buildWhatsAppMessage = (invoice: Invoice, settings: ShopSettings): 
   const docTitle = isQuote ? 'Quotation / Estimate' : 'Invoice / Bill';
   const currency = settings.currency;
   const pos = settings.currencyPosition;
-
-  const docUrl = getCustomerPortalUrl(invoice.id);
 
   let message = `☀️ *${settings.shopName}*\n`;
   if (settings.tagline) {
@@ -173,11 +161,6 @@ export const buildWhatsAppMessage = (invoice: Invoice, settings: ShopSettings): 
     message += `\n🛡️ *WARRANTY:* ${invoice.warrantyNotes || settings.warrantyDisclaimer}\n`;
   }
 
-  // Online link
-  if (docUrl) {
-    message += `\n🔗 *View & Download Full PDF Document:*\n${docUrl}\n`;
-  }
-
   message += `\nFor any queries or assistance, please reach out to us at *${settings.phone}* or *${settings.email}*.\n\n`;
   message += `Thank you for choosing *${settings.shopName}*! ☀️`;
 
@@ -202,7 +185,6 @@ export const buildEmailBody = (invoice: Invoice, settings: ShopSettings): string
   const docTitle = isQuote ? 'Quotation & Estimate' : 'Invoice';
   const currency = settings.currency;
   const pos = settings.currencyPosition;
-  const docUrl = getCustomerPortalUrl(invoice.id);
 
   let body = `Dear ${invoice.customerName},\n\n`;
   body += `Thank you for choosing ${settings.shopName}. Please find the details for your ${docTitle} (${invoice.invoiceNumber}) below.\n\n`;
@@ -257,13 +239,6 @@ export const buildEmailBody = (invoice: Invoice, settings: ShopSettings): string
     body += `${invoice.termsAndConditions || settings.termsAndConditions}\n\n`;
   }
 
-  if (docUrl) {
-    body += `ONLINE DOCUMENT & PDF ACCESS:\n`;
-    body += `--------------------------------------------------\n`;
-    body += `You can review and print your official document directly at:\n`;
-    body += `${docUrl}\n\n`;
-  }
-
   body += `Warm regards,\n\n`;
   body += `${settings.ownerName || settings.shopName}\n`;
   body += `${settings.shopName}\n`;
@@ -284,14 +259,10 @@ export const buildSmsMessage = (invoice: Invoice, settings: ShopSettings): strin
   const label = isQuote ? 'Quotation' : 'Invoice';
   const currency = settings.currency;
   const pos = settings.currencyPosition;
-  const docUrl = getCustomerPortalUrl(invoice.id);
 
   let sms = `Hello ${invoice.customerName}, your ${settings.shopName} ${label} #${invoice.invoiceNumber} is ready. Total: ${formatCurrency(invoice.grandTotal, currency, pos)}`;
   if (invoice.balanceDue > 0) {
     sms += `, Due: ${formatCurrency(invoice.balanceDue, currency, pos)}`;
-  }
-  if (docUrl) {
-    sms += `. View online: ${docUrl}`;
   }
   sms += `. Call: ${settings.phone}`;
   return sms;
@@ -490,7 +461,6 @@ export const buildPaymentRequestMessage = (
   const balanceStr = formatCurrency(invoice.balanceDue, currency, pos);
   const totalStr = formatCurrency(invoice.grandTotal, currency, pos);
   const paidStr = formatCurrency(invoice.paidAmount, currency, pos);
-  const docUrl = getCustomerPortalUrl(invoice.id);
 
   if (messageType === 'URGENT') {
     let msg = `🚨 *URGENT PAYMENT NOTICE - ${shop}*\n`;
@@ -513,7 +483,6 @@ export const buildPaymentRequestMessage = (
       if (settings.ibanOrSwift) msg += `• IBAN: *${settings.ibanOrSwift}*\n`;
       msg += `\n`;
     }
-    if (docUrl) msg += `🔗 *View Invoice Online:* ${docUrl}\n\n`;
     msg += `Please share the bank transfer receipt once transferred. Thank you.\n📞 *Support:* ${settings.phone}`;
     return msg;
   }
@@ -545,7 +514,6 @@ export const buildPaymentRequestMessage = (
       if (settings.ibanOrSwift) msg += `• *IBAN:* ${settings.ibanOrSwift}\n`;
       msg += `\n`;
     }
-    if (docUrl) msg += `🔗 *Official Digital Invoice:* ${docUrl}\n\n`;
     msg += `Regards,\n*${settings.ownerName || settings.shopName}*\n📞 ${settings.phone}`;
     return msg;
   }
@@ -572,7 +540,6 @@ export const buildPaymentRequestMessage = (
       if (settings.ibanOrSwift) msg += `• IBAN: *${settings.ibanOrSwift}*\n`;
       msg += `\n`;
     }
-    if (docUrl) msg += `🔗 *View Document:* ${docUrl}\n\n`;
     msg += `Thank you for partnering with *${shop}* towards clean solar energy! ☀️\n📞 *Call/WhatsApp:* ${settings.phone}`;
     return msg;
   }
@@ -598,7 +565,6 @@ export const buildPaymentRequestMessage = (
       if (settings.ibanOrSwift) msg += `• IBAN: *${settings.ibanOrSwift}*\n`;
       msg += `\n`;
     }
-    if (docUrl) msg += `🔗 *آن لائن بل دیکھیں:* ${docUrl}\n\n`;
     msg += `براہِ کرم ادائیگی کے بعد ٹرانزیکشن رسید شیئر فرمائیں تاکہ کھاتہ کلیئر کیا جا سکے۔ شکریہ! ☀️\n`;
     msg += `📞 *رابطہ نمبر:* ${settings.phone}`;
     return msg;
@@ -609,7 +575,6 @@ export const buildPaymentRequestMessage = (
     if (settings.bankAccountNumber) {
       msg += ` Pay: ${settings.bankName} A/C ${settings.bankAccountNumber}.`;
     }
-    if (docUrl) msg += ` View: ${docUrl}`;
     msg += ` Ph: ${settings.phone}`;
     return msg;
   }
@@ -630,7 +595,6 @@ export const buildPaymentRequestMessage = (
     msg += `🏦 *Payment Details:*\n`;
     msg += `• ${settings.bankName} - Account #: ${settings.bankAccountNumber} (${settings.bankAccountTitle})\n\n`;
   }
-  if (docUrl) msg += `🔗 *View Full Invoice:* ${docUrl}\n\n`;
   msg += `Please let us know once transferred so we can record your receipt. Thank you! ☀️\n📞 ${settings.phone}`;
   return msg;
 };
@@ -658,7 +622,6 @@ export const buildPaymentReceivedReceiptMessage = (
   const balanceStr = formatCurrency(invoice.balanceDue, currency, pos);
   const totalPaidStr = formatCurrency(invoice.paidAmount, currency, pos);
   const methodLabel = payment.method.replace(/_/g, ' ');
-  const docUrl = getCustomerPortalUrl(invoice.id);
 
   if (receiptType === 'URDU_RECEIPT') {
     let msg = `🧾 *رسید برائے وصولی رقم (Official Payment Receipt)*\n`;
@@ -687,7 +650,6 @@ export const buildPaymentReceivedReceiptMessage = (
       msg += `• ریمارکس: ${payment.notes}\n`;
     }
     msg += `\n`;
-    if (docUrl) msg += `🔗 *ڈیجیٹل رسید دیکھیں:* ${docUrl}\n\n`;
     msg += `ہم پر اعتماد کرنے کا بے حد شکریہ! ☀️\n`;
     msg += `📞 *اکاؤنٹس ڈیپارٹمنٹ:* ${settings.phone}`;
     return msg;
@@ -699,7 +661,6 @@ export const buildPaymentReceivedReceiptMessage = (
       msg += ` [Discount: ${discountStr}]`;
     }
     msg += ` for Inv #${invoice.invoiceNumber} from ${invoice.customerName}. Bal Due: ${balanceStr}. Thank you!`;
-    if (docUrl) msg += ` Receipt: ${docUrl}`;
     msg += ` Ph: ${settings.phone}`;
     return msg;
   }
@@ -723,7 +684,6 @@ export const buildPaymentReceivedReceiptMessage = (
     }
     msg += `\n🛡️ *WARRANTY & SUPPORT STATUS: ACTIVE*\n`;
     msg += `Your manufacturer warranties, net metering documentation, and after-sales customer care are fully active.\n\n`;
-    if (docUrl) msg += `🔗 *Download Zero-Balance Receipt & Invoice:* ${docUrl}\n\n`;
     msg += `Thank you for trusting *${shop}* for your solar energy journey!\n`;
     msg += `📞 *Customer Care:* ${settings.phone}`;
     return msg;
@@ -747,7 +707,6 @@ export const buildPaymentReceivedReceiptMessage = (
     }
     msg += `• *Remaining Balance Due:* ${balanceStr}\n\n`;
     msg += `🚀 *NEXT PROJECT STEP:* Equipment allocation & installation phase is moving forward. Our technician team will coordinate with you for on-site dispatch.\n\n`;
-    if (docUrl) msg += `🔗 *Updated Invoice Statement:* ${docUrl}\n\n`;
     msg += `Best Regards,\n*${shop}*\n📞 ${settings.phone}`;
     return msg;
   }
@@ -777,7 +736,6 @@ export const buildPaymentReceivedReceiptMessage = (
     msg += `• Remarks: ${payment.notes}\n`;
   }
   msg += `\n`;
-  if (docUrl) msg += `🔗 *Official Digital Receipt & Statement:* ${docUrl}\n\n`;
   msg += `Thank you for your business! ☀️\n`;
   msg += `📞 *Accounts Department:* ${settings.phone}`;
   return msg;
