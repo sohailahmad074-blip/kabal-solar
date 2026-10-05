@@ -11,7 +11,8 @@ import {
   Users,
   ShieldCheck,
   UserCheck,
-  Github
+  Github,
+  FileSpreadsheet
 } from 'lucide-react';
 import { ShopSettings, ProductItem, UserRole } from '../types/solar';
 import { SyncStatus } from '../services/cloudSync';
@@ -25,6 +26,7 @@ interface NavbarProps {
   onLockSoftware?: () => void;
   onOpenEstimator?: () => void;
   onOpenNewInvoice?: () => void;
+  onOpenNewQuotation?: () => void;
   onOpenNewPO?: () => void;
   onOpenQuickInvoice?: () => void;
   onOpenQuickExpense?: () => void;
@@ -45,6 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLockSoftware,
   onOpenEstimator,
   onOpenNewInvoice,
+  onOpenNewQuotation,
   onOpenNewPO,
   onOpenQuickInvoice,
   onOpenQuickExpense,
@@ -185,7 +188,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
-        {/* Primary Action: Create Invoice / Quote (Owner only) */}
+        {/* Action: Create Quotation / Proposal (Owner only) */}
+        {!isPartner && onOpenNewQuotation && (
+          <button
+            type="button"
+            onClick={onOpenNewQuotation}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded shadow-xs transition-colors cursor-pointer"
+            title="Make Solar Quotation / Estimate (Add manual items; zero stock deducted)"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">+ Quotation</span>
+            <span className="sm:hidden">+ Quote</span>
+          </button>
+        )}
+
+        {/* Primary Action: Create Invoice (Owner only) */}
         {!isPartner && triggerInvoice && (
           <button
             type="button"

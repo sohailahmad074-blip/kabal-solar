@@ -471,9 +471,8 @@ export function App() {
     if (existingInvoice && existingInvoice.inventoryDeducted) {
       for (const oldItem of existingInvoice.items) {
         const qty = Number(oldItem.quantity) || 0;
-        if (qty <= 0) continue;
-        const targetId = oldItem.productId || updatedProducts.find((p) => p.name.trim().toLowerCase() === oldItem.description.trim().toLowerCase())?.id;
-        if (!targetId) continue;
+        if (qty <= 0 || !oldItem.productId || oldItem.isManual) continue;
+        const targetId = oldItem.productId;
 
         const pIndex = updatedProducts.findIndex((p) => p.id === targetId);
         if (pIndex >= 0) {
@@ -489,22 +488,22 @@ export function App() {
     }
 
     // 2. Determine if the new/edited invoice should deduct inventory
-    // Default is true for sales invoices (Tax Invoices, Proforma, Warranty Certs)
-    // For quotations, only deduct if user explicitly toggled deductFromInventory === true
+    // Quotations NEVER deduct stock! Quotations are proposals/estimates.
+    // Invoices only deduct if deductFromInventory is enabled.
     const isQuotation = newInvoice.type === 'QUOTATION';
-    const shouldDeduct = newInvoice.deductFromInventory !== undefined
-      ? Boolean(newInvoice.deductFromInventory)
-      : !isQuotation;
+    const shouldDeduct = isQuotation 
+      ? false 
+      : (newInvoice.deductFromInventory !== undefined ? Boolean(newInvoice.deductFromInventory) : true);
 
     if (shouldDeduct) {
       for (const newItem of newInvoice.items) {
         const qty = Number(newItem.quantity) || 0;
         if (qty <= 0) continue;
 
-        // Find product by ID or name matching
-        const targetId = newItem.productId || updatedProducts.find((p) => p.name.trim().toLowerCase() === newItem.description.trim().toLowerCase())?.id;
-        if (!targetId) continue;
+        // Skip manual items or items with no catalog productId (they have nothing to do with stock)
+        if (!newItem.productId || newItem.isManual) continue;
 
+        const targetId = newItem.productId;
         const pIndex = updatedProducts.findIndex((p) => p.id === targetId);
         if (pIndex >= 0) {
           const p = updatedProducts[pIndex];
@@ -1024,10 +1023,10 @@ export function App() {
     batteryKwh: number;
     estimatedCost: number;
   }) => {
-    // Create pre-filled draft invoice
+    // Create pre-filled draft quotation
     const draftInvoice: Invoice = {
       id: `inv-${Date.now()}`,
-      invoiceNumber: `${settings.invoicePrefix}${Math.floor(100 + Math.random() * 900)}`,
+      invoiceNumber: `${settings.quotationPrefix || 'QT-'}${Math.floor(1000 + Math.random() * 9000)}`,
       type: 'QUOTATION',
       date: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -1136,6 +1135,16 @@ export function App() {
     setIsInvoiceEditorOpen(true);
   };
 
+  // Create clean Quotation draft (Zero stock deduction)
+  const handleCreateQuotation = () => {
+    setEditingInvoice({
+      type: 'QUOTATION',
+      deductFromInventory: false,
+      inventoryDeducted: false,
+    } as any);
+    setIsInvoiceEditorOpen(true);
+  };
+
   // --- RESET & IMPORT DATA ---
   const handleResetData = () => {
     resetToSampleData();
@@ -1199,6 +1208,7 @@ export function App() {
         currentRole={currentRole}
         onOpenRoleSwitch={() => setIsRoleSwitchModalOpen(true)}
         onLockSoftware={handleLockSoftware}
+        onOpenNewQuotation={handleCreateQuotation}
         settings={settings}
         onOpenBarcodeScanner={handleOpenBarcodeScanner}
         onOpenSecretProfit={() => setIsSecretProfitOpen(true)}
@@ -1220,6 +1230,7 @@ export function App() {
             setEditingInvoice(null);
             setIsInvoiceEditorOpen(true);
           }}
+          onOpenNewQuotation={handleCreateQuotation}
           onOpenNewPO={() => {
             setEditingPO(null);
             setIsPOEditorOpen(true);
@@ -1310,6 +1321,7 @@ export function App() {
                     setEditingInvoice(null);
                     setIsInvoiceEditorOpen(true);
                   }}
+                  onOpenNewQuotation={handleCreateQuotation}
                   onOpenNewPO={() => {
                     setEditingPO(null);
                     setIsPOEditorOpen(true);

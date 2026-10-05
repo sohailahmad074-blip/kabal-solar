@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   UserCheck,
   KeyRound,
-  Github
+  Github,
+  FileSpreadsheet
 } from 'lucide-react';
 import { TabType, UserRole, ShopSettings } from '../types/solar';
 import { SyncStatus } from '../services/cloudSync';
@@ -32,6 +33,7 @@ interface SidebarProps {
   currentRole?: UserRole;
   onOpenRoleSwitch?: () => void;
   onLockSoftware?: () => void;
+  onOpenNewQuotation?: () => void;
   settings?: ShopSettings;
   onOpenBarcodeScanner?: (mode?: 'STOCK_IN' | 'STOCK_OUT' | 'LOG' | 'LABELS') => void;
   onOpenSecretProfit?: () => void;
@@ -48,6 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentRole = 'OWNER',
   onOpenRoleSwitch,
   onLockSoftware,
+  onOpenNewQuotation,
   settings,
   onOpenBarcodeScanner,
   onOpenSecretProfit,
@@ -312,6 +315,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {renderNavGroup(managementNav)}
             </div>
           </>
+        )}
+
+        {/* Quick Quotation Launcher (Owner Only) */}
+        {!isPartner && onOpenNewQuotation && (
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={onOpenNewQuotation}
+              className="w-full flex items-center justify-between gap-2 rounded-lg bg-blue-500/15 border border-blue-500/30 px-3 py-2 text-xs font-bold text-blue-300 hover:bg-blue-500/25 hover:text-blue-100 transition-all cursor-pointer shadow-xs group"
+              title="Create a Solar Quotation / Estimate (No stock deducted; custom items allowed)"
+            >
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-4 w-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                <span>+ Make Quotation</span>
+              </div>
+              <span className="rounded bg-blue-500 text-white px-1.5 py-0.2 text-[9px] font-black uppercase tracking-wider">
+                Quote
+              </span>
+            </button>
+          </div>
         )}
 
         {/* Quick Barcode Scanner Launcher */}

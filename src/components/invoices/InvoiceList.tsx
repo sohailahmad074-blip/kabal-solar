@@ -7,12 +7,13 @@ import {
   CreditCard, 
   Trash2, 
   Edit3, 
-  Sun,
-  Eye,
-  CheckCircle2,
-  Send,
-  BarChart3,
-  ArrowRightLeft
+  Sun, 
+  Eye, 
+  CheckCircle2, 
+  Send, 
+  BarChart3, 
+  ArrowRightLeft,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Invoice, ShopSettings } from '../../types/solar';
 import { Badge } from '../common/Badge';
@@ -68,6 +69,9 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   const totalPaid = filteredInvoices.reduce((acc, inv) => acc + inv.paidAmount, 0);
   const totalDue = filteredInvoices.reduce((acc, inv) => acc + inv.balanceDue, 0);
 
+  const quotationCount = invoices.filter((i) => i.type === 'QUOTATION').length;
+  const invoiceCount = invoices.filter((i) => i.type === 'INVOICE').length;
+
   return (
     <div className="space-y-4">
       {/* Header & Title */}
@@ -120,14 +124,105 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
 
           <button
             type="button"
-            onClick={() => handleEdit()}
+            onClick={() => handleEdit({ type: 'QUOTATION', deductFromInventory: false } as any)}
+            className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
+            title="Create a solar quotation / estimate (no stock deducted)"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">+ Make Quotation</span>
+            <span className="sm:hidden">+ Quote</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleEdit({ type: 'INVOICE' } as any)}
             className="flex items-center gap-1.5 rounded bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-900 shadow-xs hover:bg-amber-500 transition-colors cursor-pointer"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>+ Create Invoice / Quote</span>
+            <span className="hidden sm:inline">+ Create Invoice</span>
+            <span className="sm:hidden">+ Invoice</span>
           </button>
         </div>
       </div>
+
+      {/* Segmented Document View Tabs */}
+      <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2 overflow-x-auto text-xs">
+        <button
+          type="button"
+          onClick={() => setTypeFilter('ALL')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
+            typeFilter === 'ALL'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <span>All Documents</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${typeFilter === 'ALL' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+            {invoices.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTypeFilter('QUOTATION')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
+            typeFilter === 'QUOTATION'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-blue-700 hover:text-blue-900 hover:bg-blue-50 border border-transparent hover:border-blue-200'
+          }`}
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5" />
+          <span>Quotations & Estimates</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${typeFilter === 'QUOTATION' ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-800'}`}>
+            {quotationCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTypeFilter('INVOICE')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
+            typeFilter === 'INVOICE'
+              ? 'bg-amber-400 text-slate-950 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <span>Tax Invoices</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${typeFilter === 'INVOICE' ? 'bg-amber-500 text-slate-950' : 'bg-slate-200 text-slate-700'}`}>
+            {invoiceCount}
+          </span>
+        </button>
+      </div>
+
+      {/* Prominent Quotation Explanatory Banner when Quotations filter is active */}
+      {typeFilter === 'QUOTATION' && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-950 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white font-bold shrink-0 shadow-xs">
+              <FileSpreadsheet className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-blue-950">Solar Quotations & Proposals</h3>
+                <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded-full">
+                  🛡️ ZERO STOCK DEDUCTION
+                </span>
+              </div>
+              <p className="text-xs text-blue-800 mt-0.5">
+                Quotations are client proposals and estimates. Warehouse stock is never deducted. You can add catalog products or type any custom manual items (civil foundation, labor, cabling, custom items) without SKU or inventory restrictions.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleEdit({ type: 'QUOTATION', deductFromInventory: false } as any)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors shrink-0 cursor-pointer self-start sm:self-auto"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>+ Make Quotation</span>
+          </button>
+        </div>
+      )}
 
       {/* Summary Chips */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -329,6 +424,27 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                               <span className="hidden sm:inline">Options</span>
                             </button>
                           </div>
+                        )}
+
+                        {inv.type === 'QUOTATION' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleEdit({
+                                ...inv,
+                                id: undefined,
+                                type: 'INVOICE',
+                                invoiceNumber: `${settings.invoicePrefix || 'INV-'}${Math.floor(1000 + Math.random() * 9000)}`,
+                                deductFromInventory: true,
+                                notes: `Converted from Quotation #${inv.invoiceNumber}. ${inv.notes || ''}`.trim(),
+                              } as any);
+                            }}
+                            className="flex items-center gap-1 rounded bg-blue-50 px-2 py-1 text-xs font-bold text-blue-800 hover:bg-blue-100 border border-blue-300 shadow-2xs transition-colors cursor-pointer"
+                            title="Convert this quotation to an active Tax Invoice & deduct warehouse stock"
+                          >
+                            <FileSpreadsheet className="h-3 w-3 text-blue-700" />
+                            <span className="hidden lg:inline">Convert to Invoice</span>
+                          </button>
                         )}
 
                         <button

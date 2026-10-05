@@ -21,7 +21,8 @@ import {
   Zap,
   MessageCircle,
   ArrowRightLeft,
-  Radio
+  Radio,
+  FileSpreadsheet
 } from 'lucide-react';
 import { 
   Invoice, 
@@ -46,6 +47,7 @@ interface DashboardProps {
   settings: ShopSettings;
   setActiveTab?: (tab: string) => void;
   onOpenNewInvoice?: () => void;
+  onOpenNewQuotation?: () => void;
   onOpenNewPO?: () => void;
   onOpenEstimator?: () => void;
   onViewInvoice: (invoice: Invoice) => void;
@@ -67,6 +69,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   settings,
   setActiveTab,
   onOpenNewInvoice,
+  onOpenNewQuotation,
   onOpenNewPO,
   onOpenEstimator,
   onViewInvoice,
@@ -154,6 +157,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Action 0: Solar Proposal / Quotation (Zero Stock Deducted) */}
+          {onOpenNewQuotation && (
+            <button
+              type="button"
+              onClick={onOpenNewQuotation}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+              title="Make Solar Quotation / Estimate (Add manual non-stock items; stock is never deducted)"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              <span>+ Make Quotation</span>
+            </button>
+          )}
+
           {/* Action 1: Standard Invoice */}
           <button
             type="button"

@@ -84,6 +84,7 @@ export interface InvoiceItem {
   costPrice?: number; // For profit calculation
   discountPercent: number;
   total: number;
+  isManual?: boolean; // When true, item is purely custom/manual with zero SKU and no stock linkage
 }
 
 export interface PaymentRecord {
