@@ -1,12 +1,13 @@
 import React from 'react';
 import { X, Settings, Building2 } from 'lucide-react';
 import { ShopSettings, UserRole } from '../../types/solar';
+import { defaultSettings } from '../../utils/storage';
 import { SettingsView } from './SettingsView';
 
 interface ShopSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  settings: ShopSettings;
+  settings?: ShopSettings;
   onSaveSettings: (newSettings: ShopSettings) => void;
   onResetData: () => void;
   allAppData: any;
@@ -32,6 +33,8 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const safeSettings = settings || defaultSettings;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
       <div 
@@ -50,7 +53,7 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
                   Shop Settings Window
                 </h2>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  {settings.shopName || 'SolarCraft ERP'}
+                  {safeSettings.shopName || 'SolarCraft ERP'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
@@ -72,7 +75,7 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
         {/* Modal Window Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50">
           <SettingsView
-            settings={settings}
+            settings={safeSettings}
             onSaveSettings={(newSettings) => {
               onSaveSettings(newSettings);
             }}

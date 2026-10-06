@@ -5,12 +5,14 @@ interface BadgeProps {
   status?: string;
   label?: string;
   size?: 'sm' | 'md';
+  variant?: string;
+  children?: React.ReactNode;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ status = 'DRAFT', label, size = 'md' }) => {
-  const safeStatus = status || 'DRAFT';
+export const Badge: React.FC<BadgeProps> = ({ status = 'DRAFT', label, size = 'md', variant, children }) => {
+  const safeStatus = (typeof children === 'string' ? children : '') || status || 'DRAFT';
   const styles = getStatusBadgeColor(safeStatus);
-  const displayLabel = label || (typeof safeStatus === 'string' ? safeStatus.replace(/_/g, ' ') : String(safeStatus));
+  const displayLabel = children || label || (typeof safeStatus === 'string' ? safeStatus.replace(/_/g, ' ') : String(safeStatus));
 
   return (
     <span

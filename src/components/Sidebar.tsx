@@ -150,12 +150,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             key={item.id}
             type="button"
-            onClick={() => {
-              setActiveTab(item.id);
-              if (item.id === 'SETTINGS' && onOpenSettings) {
-                onOpenSettings();
-              }
-            }}
+            onClick={() => setActiveTab(item.id)}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               isActive
                 ? 'bg-slate-800 text-white font-semibold shadow-xs'

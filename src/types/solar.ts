@@ -94,8 +94,10 @@ export interface PaymentRecord {
   discount?: number; // Settlement discount or waiver granted during payment collection
   method: PaymentMethod;
   referenceNo?: string;
+  referenceNumber?: string; // alias for referenceNo
   notes?: string;
   recordedBy?: string;
+  receivedBy?: string; // alias for recordedBy
 }
 
 export type PaymentRequestMessageType = 
@@ -190,6 +192,7 @@ export interface PurchaseOrderItem {
   id: string;
   productId?: string;
   name: string;
+  description?: string; // alias for name
   category: ProductCategory;
   brand: string;
   specs: string;
@@ -210,6 +213,7 @@ export interface PurchaseOrder {
   supplierAddress?: string;
   
   orderDate: string;
+  date?: string; // alias for orderDate
   expectedDate?: string;
   receivedDate?: string;
   status: POStatus;
@@ -240,12 +244,16 @@ export interface Supplier {
   email: string;
   address: string;
   city: string;
+  country?: string;
   taxNumber?: string;
   suppliedCategories: ProductCategory[];
+  categoriesSupplied?: ProductCategory[];
   rating?: number;
   bankDetails?: string;
+  paymentTerms?: string;
   notes?: string;
   totalPurchased: number;
+  totalPurchasedAmount?: number;
   totalOutstanding: number;
   createdAt: string;
 }
@@ -284,9 +292,11 @@ export interface Customer {
 export type ExpenseCategory = 
   | 'SHOP_RENT'
   | 'TECHNICIAN_LABOR'
+  | 'LABOR_INSTALLATION_WAGES'
   | 'TRANSPORT_FREIGHT'
   | 'TOOLS_EQUIPMENT'
   | 'NET_METERING_PERMITS'
+  | 'PERMITS_NET_METERING_FEES'
   | 'MARKETING_ADS'
   | 'UTILITIES_ELECTRICITY'
   | 'TAXES_LICENSES'
@@ -342,6 +352,7 @@ export interface ShopSettings {
   bankAccountTitle: string;
   bankAccountNumber: string;
   ibanOrSwift: string;
+  bankDetails?: any;
   
   // Customization
   invoicePrefix: string;

@@ -451,9 +451,9 @@ export const SalesReportView: React.FC<SalesReportViewProps> = ({
             date: pmt.date || inv.date,
             amount: pmt.amount || 0,
             method: (pmt.method as any) || 'CASH',
-            referenceNumber: pmt.referenceNumber,
+            referenceNumber: pmt.referenceNumber || pmt.referenceNo,
             notes: pmt.notes,
-            receivedBy: pmt.receivedBy,
+            receivedBy: pmt.receivedBy || pmt.recordedBy,
             invoiceGrandTotal: inv.grandTotal,
             invoiceBalanceDue: inv.balanceDue,
           });

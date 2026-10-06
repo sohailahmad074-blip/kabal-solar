@@ -4,10 +4,11 @@ import { X } from 'lucide-react';
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title?: string;
   subtitle?: string;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,7 +18,9 @@ export const Modal: React.FC<ModalProps> = ({
   subtitle,
   children,
   maxWidth = '2xl',
+  size,
 }) => {
+  const effectiveMaxWidth = size || maxWidth;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -44,7 +47,7 @@ export const Modal: React.FC<ModalProps> = ({
     '4xl': 'max-w-4xl',
     '5xl': 'max-w-5xl',
     full: 'max-w-[95vw]',
-  }[maxWidth];
+  }[effectiveMaxWidth];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4">

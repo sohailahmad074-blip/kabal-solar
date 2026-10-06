@@ -20,16 +20,18 @@ import {
   Trash2,
   Layers,
   ShieldCheck,
-  Github
+  Github,
+  Lock
 } from 'lucide-react';
 import { ShopSettings, UserRole } from '../../types/solar';
 import { getAllCategories, DEFAULT_CATEGORY_LABELS } from '../../utils/categories';
+import { defaultSettings } from '../../utils/storage';
 
 interface SettingsViewProps {
-  settings: ShopSettings;
+  settings?: ShopSettings;
   onSaveSettings: (newSettings: ShopSettings) => void;
   onResetData: () => void;
-  allAppData: any;
+  allAppData?: any;
   onImportData: (data: any) => void;
   onOpenCloudSync?: () => void;
   onOpenGitHub?: () => void;
@@ -48,26 +50,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onSwitchRole,
   onLockSoftware,
 }) => {
-  const [formData, setFormData] = useState<ShopSettings>({ 
-    ...settings,
-    customCategories: settings.customCategories || ['EV_CHARGERS', 'SOLAR_LIGHTS', 'SOLAR_WATER_HEATERS'],
-    partnerPin: settings.partnerPin || '1234',
-    partnerName: settings.partnerName || 'Procurement & Inventory Partner'
-  });
+  const safeInitialSettings: ShopSettings = {
+    ...defaultSettings,
+    ...(settings || {}),
+    customCategories: Array.isArray(settings?.customCategories)
+      ? settings.customCategories.filter((c) => typeof c === 'string' && c.trim())
+      : (defaultSettings.customCategories || ['EV_CHARGERS', 'SOLAR_LIGHTS', 'SOLAR_WATER_HEATERS']),
+    partnerPin: settings?.partnerPin || defaultSettings.partnerPin || '1234',
+    partnerName: settings?.partnerName || defaultSettings.partnerName || 'Procurement & Inventory Partner',
+  };
+
+  const [formData, setFormData] = useState<ShopSettings>(() => safeInitialSettings);
   const [saveMessage, setSaveMessage] = useState('');
   const [copiedPartnerLink, setCopiedPartnerLink] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
 
   // Keep form data in sync if settings update from external changes or cloud
   useEffect(() => {
-    setFormData((prev) => ({
-      ...prev,
-      ...settings,
-      customCategories: settings.customCategories || prev.customCategories || ['EV_CHARGERS', 'SOLAR_LIGHTS', 'SOLAR_WATER_HEATERS'],
-    }));
+    if (settings) {
+      setFormData((prev) => ({
+        ...defaultSettings,
+        ...prev,
+        ...settings,
+        customCategories: Array.isArray(settings.customCategories)
+          ? settings.customCategories.filter((c) => typeof c === 'string' && c.trim())
+          : (prev.customCategories || defaultSettings.customCategories || []),
+      }));
+    }
   }, [settings]);
 
-  const partnerLink = `${window.location.origin}${window.location.pathname}?role=partner`;
+  const partnerLink = typeof window !== 'undefined' && window.location
+    ? `${window.location.origin}${window.location.pathname}?role=partner`
+    : '';
 
   const handleChange = (field: keyof ShopSettings, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -187,7 +201,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Shop / Company Name *</label>
               <input
                 type="text"
-                value={formData.shopName}
+                value={formData.shopName || ''}
                 onChange={(e) => handleChange('shopName', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
                 required
@@ -198,7 +212,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Business Tagline</label>
               <input
                 type="text"
-                value={formData.tagline}
+                value={formData.tagline || ''}
                 onChange={(e) => handleChange('tagline', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -208,7 +222,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Tax / NTN / GST #</label>
               <input
                 type="text"
-                value={formData.taxRegistrationNumber}
+                value={formData.taxRegistrationNumber || ''}
                 onChange={(e) => handleChange('taxRegistrationNumber', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none font-mono"
               />
@@ -218,7 +232,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Phone / WhatsApp</label>
               <input
                 type="text"
-                value={formData.phone}
+                value={formData.phone || ''}
                 onChange={(e) => handleChange('phone', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -228,7 +242,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Official Email</label>
               <input
                 type="email"
-                value={formData.email}
+                value={formData.email || ''}
                 onChange={(e) => handleChange('email', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -238,7 +252,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Owner / Manager Name</label>
               <input
                 type="text"
-                value={formData.ownerName}
+                value={formData.ownerName || ''}
                 onChange={(e) => handleChange('ownerName', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -248,7 +262,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Office / Showroom Address</label>
               <input
                 type="text"
-                value={formData.address}
+                value={formData.address || ''}
                 onChange={(e) => handleChange('address', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -258,7 +272,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">City / State</label>
               <input
                 type="text"
-                value={formData.city}
+                value={formData.city || ''}
                 onChange={(e) => handleChange('city', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -448,22 +462,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="pt-2 border-t border-slate-100 space-y-1.5">
                 <div className="text-[10px] font-bold uppercase text-amber-700">Custom Added Categories:</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {(formData.customCategories || []).map((cat) => (
-                    <span
-                      key={cat}
-                      className="px-2.5 py-1 rounded bg-amber-50 text-amber-900 text-[11px] font-bold border border-amber-300 flex items-center gap-1.5"
-                    >
-                      <span>{cat.replace(/_/g, ' ')}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCustomCategory(cat)}
-                        className="text-amber-700 hover:text-rose-600 transition-colors p-0.5 rounded"
-                        title="Remove category"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
+                  {(formData.customCategories || [])
+                    .filter((cat): cat is string => typeof cat === 'string' && Boolean(cat && cat.trim()))
+                    .map((cat) => {
+                      const displayLabel = String(cat).replace(/_/g, ' ');
+                      return (
+                        <span
+                          key={cat}
+                          className="px-2.5 py-1 rounded bg-amber-50 text-amber-900 text-[11px] font-bold border border-amber-300 flex items-center gap-1.5"
+                        >
+                          <span>{displayLabel}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomCategory(cat)}
+                            className="text-amber-700 hover:text-rose-600 transition-colors p-0.5 rounded cursor-pointer"
+                            title="Remove category"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </span>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -484,7 +503,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Currency Symbol</label>
               <input
                 type="text"
-                value={formData.currency}
+                value={formData.currency || '$'}
                 onChange={(e) => handleChange('currency', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -493,12 +512,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div>
               <label className="text-[10px] font-bold uppercase text-slate-500">Currency Position</label>
               <select
-                value={formData.currencyPosition}
-                onChange={(e) => handleChange('currencyPosition', e.target.value as 'PREFIX' | 'SUFFIX')}
+                value={formData.currencyPosition === 'AFTER' || (formData.currencyPosition as any) === 'SUFFIX' ? 'AFTER' : 'BEFORE'}
+                onChange={(e) => handleChange('currencyPosition', e.target.value as 'BEFORE' | 'AFTER')}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800 focus:border-amber-500 focus:outline-none"
               >
-                <option value="PREFIX">Prefix (e.g. $1,000)</option>
-                <option value="SUFFIX">Suffix (e.g. 1,000 PKR)</option>
+                <option value="BEFORE">Prefix / Before (e.g. $ 1,000)</option>
+                <option value="AFTER">Suffix / After (e.g. 1,000 PKR)</option>
               </select>
             </div>
 
@@ -506,7 +525,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Invoice Prefix</label>
               <input
                 type="text"
-                value={formData.invoicePrefix}
+                value={formData.invoicePrefix || 'INV-'}
                 onChange={(e) => handleChange('invoicePrefix', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -516,7 +535,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">PO Prefix</label>
               <input
                 type="text"
-                value={formData.poPrefix}
+                value={formData.poPrefix || 'PO-'}
                 onChange={(e) => handleChange('poPrefix', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -538,7 +557,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Bank Name</label>
               <input
                 type="text"
-                value={formData.bankName}
+                value={formData.bankName || ''}
                 onChange={(e) => handleChange('bankName', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -548,7 +567,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">Account Title / Name</label>
               <input
                 type="text"
-                value={formData.bankAccountTitle}
+                value={formData.bankAccountTitle || ''}
                 onChange={(e) => handleChange('bankAccountTitle', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-900 focus:border-amber-500 focus:outline-none"
               />
@@ -558,7 +577,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-[10px] font-bold uppercase text-slate-500">IBAN / Account Number</label>
               <input
                 type="text"
-                value={formData.bankAccountNumber}
+                value={formData.bankAccountNumber || ''}
                 onChange={(e) => handleChange('bankAccountNumber', e.target.value)}
                 className="mt-1 w-full rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-mono font-bold text-slate-900 focus:border-amber-500 focus:outline-none"
               />

@@ -208,7 +208,7 @@ export const PurchasingList: React.FC<PurchasingListProps> = ({
                           <FileText className="h-3.5 w-3.5 text-blue-500" />
                           <span className="font-bold text-slate-900">{po.poNumber}</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">{formatDate(po.date)}</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">{formatDate(po.orderDate || po.date || '')}</span>
                       </td>
 
                       <td className="py-2 px-3">
@@ -223,7 +223,7 @@ export const PurchasingList: React.FC<PurchasingListProps> = ({
 
                       <td className="py-2 px-3">
                         <p className="font-medium text-slate-800 truncate max-w-[200px]">
-                          {po.items[0]?.description || 'Hardware items'}
+                          {po.items[0]?.name || po.items[0]?.description || 'Hardware items'}
                         </p>
                         <p className="text-[10px] text-slate-400">
                           {po.items.length} line item(s) • Total Qty: {po.items.reduce((acc, i) => acc + i.quantity, 0)}
@@ -308,11 +308,11 @@ export const PurchasingList: React.FC<PurchasingListProps> = ({
               <div className="space-y-0.5 text-[11px] text-slate-600">
                 <p>📞 {sup.phone}</p>
                 {sup.email && <p>✉️ {sup.email}</p>}
-                <p>📍 {sup.city}, {sup.country}</p>
+                <p>📍 {sup.city}{sup.country ? `, ${sup.country}` : ''}</p>
               </div>
 
               <div className="flex flex-wrap gap-1 pt-1 border-t border-slate-100">
-                {sup.categoriesSupplied?.map((cat) => (
+                {(sup.categoriesSupplied || sup.suppliedCategories || []).map((cat) => (
                   <span key={cat} className="text-[9px] font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                     {(cat || '').replace(/_/g, ' ')}
                   </span>
@@ -322,7 +322,7 @@ export const PurchasingList: React.FC<PurchasingListProps> = ({
               <div className="flex justify-between items-center pt-2 border-t border-slate-100 text-xs">
                 <span className="text-slate-500 text-[10px]">Total Procured:</span>
                 <span className="font-bold text-slate-900">
-                  {formatCurrency(sup.totalPurchasedAmount, settings.currency, settings.currencyPosition)}
+                  {formatCurrency(sup.totalPurchasedAmount ?? sup.totalPurchased ?? 0, settings.currency, settings.currencyPosition)}
                 </span>
               </div>
             </div>

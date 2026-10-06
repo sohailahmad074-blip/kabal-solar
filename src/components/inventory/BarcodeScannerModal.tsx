@@ -41,9 +41,13 @@ interface BarcodeScannerModalProps {
   customers: Customer[];
   suppliers: SuppliersList[];
   settings: ShopSettings;
-  stockMovements: StockMovement[];
-  onStockMovement: (movement: StockMovement) => void;
-  onOpenProductEditor: (product?: ProductItem, prefillCode?: string) => void;
+  stockMovements?: StockMovement[];
+  movements?: StockMovement[];
+  onStockMovement?: (movement: StockMovement) => void;
+  onRecordMovement?: (movement: StockMovement) => void;
+  onOpenProductEditor?: (product?: ProductItem, prefillCode?: string) => void;
+  onOpenCreateProduct?: (scannedCode: any) => void;
+  initialMode?: 'STOCK_IN' | 'STOCK_OUT' | 'LOG' | 'LABELS';
   currentRole?: UserRole;
 }
 
@@ -57,13 +61,26 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   customers,
   suppliers,
   settings,
-  stockMovements,
-  onStockMovement,
-  onOpenProductEditor,
+  stockMovements: propStockMovements,
+  movements,
+  onStockMovement: propOnStockMovement,
+  onRecordMovement,
+  onOpenProductEditor: propOnOpenProductEditor,
+  onOpenCreateProduct,
+  initialMode,
   currentRole = 'OWNER',
 }) => {
+  const stockMovements = propStockMovements || movements || [];
+  const onStockMovement = (m: StockMovement) => {
+    if (propOnStockMovement) propOnStockMovement(m);
+    else if (onRecordMovement) onRecordMovement(m);
+  };
+  const onOpenProductEditor = (prod?: ProductItem, prefill?: string) => {
+    if (propOnOpenProductEditor) propOnOpenProductEditor(prod, prefill);
+    else if (onOpenCreateProduct) onOpenCreateProduct(prefill);
+  };
   const isPartner = currentRole === 'PARTNER';
-  const [activeMode, setActiveMode] = useState<ScanMode>('STOCK_IN');
+  const [activeMode, setActiveMode] = useState<ScanMode>(initialMode || 'STOCK_IN');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [cameraActive, setCameraActive] = useState(true);
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);

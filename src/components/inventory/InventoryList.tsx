@@ -25,7 +25,7 @@ import { getAllCategories, getCategoryLabel } from '../../utils/categories';
 interface InventoryListProps {
   products: ProductItem[];
   settings: ShopSettings;
-  onOpenProductEditor: (product?: ProductItem) => void;
+  onOpenProductEditor: (product?: ProductItem, prefillCode?: string) => void;
   onDeleteProduct: (id: string) => void;
   onUpdateStock: (id: string, newStock: number) => void;
   onOpenBarcodeScanner?: (mode?: 'STOCK_IN' | 'STOCK_OUT' | 'LOG' | 'LABELS') => void;

@@ -1230,7 +1230,16 @@ export const defaultExpenses: Expense[] = [
 export const loadShopSettings = (): ShopSettings => {
   try {
     const data = localStorage.getItem(SETTINGS_KEY);
-    return data ? JSON.parse(data) : defaultSettings;
+    if (!data) return defaultSettings;
+    const parsed = JSON.parse(data);
+    if (!parsed || typeof parsed !== 'object') return defaultSettings;
+    return {
+      ...defaultSettings,
+      ...parsed,
+      customCategories: Array.isArray(parsed.customCategories)
+        ? parsed.customCategories.filter((c: any) => typeof c === 'string' && c.trim())
+        : defaultSettings.customCategories,
+    };
   } catch {
     return defaultSettings;
   }

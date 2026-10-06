@@ -430,13 +430,20 @@ export const CustomerStatementPrintView: React.FC<CustomerStatementPrintViewProp
         )}
 
         {/* Bank & Payment Settlement Instructions */}
-        {settings.bankDetails && totalBalanceDue > 0 && (
+        {(settings.bankAccountNumber || settings.bankName || settings.bankDetails) && totalBalanceDue > 0 && (
           <div className="mt-5 p-3.5 rounded-lg border border-slate-200 bg-slate-50 space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
               Official Bank Settlement Account
             </span>
             <p className="text-xs text-slate-800 font-mono whitespace-pre-line leading-relaxed">
-              {settings.bankDetails}
+              {typeof settings.bankDetails === 'string'
+                ? settings.bankDetails
+                : [
+                    settings.bankName ? `Bank: ${settings.bankName}` : '',
+                    settings.bankAccountTitle ? `Title: ${settings.bankAccountTitle}` : '',
+                    settings.bankAccountNumber ? `A/C: ${settings.bankAccountNumber}` : '',
+                    settings.ibanOrSwift ? `IBAN: ${settings.ibanOrSwift}` : ''
+                  ].filter(Boolean).join('\n')}
             </p>
           </div>
         )}

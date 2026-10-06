@@ -51,9 +51,11 @@ export const getExpenseCategoryLabel = (category: ExpenseCategory): string => {
   const map: Record<ExpenseCategory, string> = {
     SHOP_RENT: 'Shop / Warehouse Rent',
     TECHNICIAN_LABOR: 'Technician & Installer Wages',
+    LABOR_INSTALLATION_WAGES: 'Civil & Installation Labor',
     TRANSPORT_FREIGHT: 'Logistics & Transportation',
     TOOLS_EQUIPMENT: 'Tools & Installation Gear',
     NET_METERING_PERMITS: 'Utility & Inspection Permits',
+    PERMITS_NET_METERING_FEES: 'Permit & DISCOM Filing Fees',
     MARKETING_ADS: 'Marketing & Advertising',
     UTILITIES_ELECTRICITY: 'Shop Utilities (Electric/Water)',
     TAXES_LICENSES: 'Taxes & Commercial Licenses',

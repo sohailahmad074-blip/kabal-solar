@@ -79,6 +79,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
       city: city.trim(),
       taxNumber: taxNumber.trim() || undefined,
       suppliedCategories: categoriesSupplied,
+      categoriesSupplied: categoriesSupplied,
+      paymentTerms: paymentTerms.trim() || undefined,
       totalPurchased: existingSupplier?.totalPurchased || 0,
       totalOutstanding: existingSupplier?.totalOutstanding || 0,
       notes: notes.trim() || undefined,

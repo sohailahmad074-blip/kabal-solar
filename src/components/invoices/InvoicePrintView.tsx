@@ -15,7 +15,7 @@ import {
   ArrowLeftRight,
   RefreshCw
 } from 'lucide-react';
-import { Invoice, ShopSettings } from '../../types/solar';
+import { Invoice, InvoiceItem, ShopSettings } from '../../types/solar';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { buildWhatsAppMessage, openWhatsApp } from '../../utils/sendDirect';
 
@@ -59,10 +59,10 @@ export const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({
     const lumpSumTotal = accessoryItems.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
     const includedPartsList = accessoryItems.map(it => it.description).filter(Boolean).join(', ');
 
-    const consolidatedLumpSumItem = {
+    const consolidatedLumpSumItem: InvoiceItem = {
       id: 'lump-sum-accessories-pkg',
       description: 'Complete Solar Installation Accessories & Balance of System (BOS) Package',
-      category: 'ACCESSORIES' as const,
+      category: 'ACCESSORIES',
       quantity: 1,
       unit: 'Package',
       unitPrice: lumpSumTotal,
@@ -72,6 +72,7 @@ export const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({
         ? `Includes turnkey installation hardware (${includedPartsList.length > 100 ? includedPartsList.substring(0, 97) + '...' : includedPartsList})` 
         : 'Turnkey Cabling, Breakers, SPDs, Connectors & Mounting Hardware',
       warrantyPeriod: accessoryItems.find(a => a.warrantyPeriod)?.warrantyPeriod || '1-Year Standard BoS Warranty',
+      serialNumbers: undefined,
     };
 
     return [...nonAccessoryItems, consolidatedLumpSumItem];
@@ -474,18 +475,18 @@ export const InvoicePrintView: React.FC<InvoicePrintViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 border-t-2 border-slate-900">
           {/* Bank Wire Details & Terms */}
           <div className="space-y-3">
-            {settings.bankDetails && (
+            {(settings.bankName || settings.bankAccountNumber || settings.bankDetails) && (
               <div className="rounded-lg bg-slate-50 p-3 border border-slate-200 text-xs">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Bank Wire / Remittance Details
                 </p>
-                <p className="font-bold text-slate-900">{settings.bankDetails.bankName}</p>
-                <p className="text-slate-700">Account Name: {settings.bankDetails.accountName}</p>
-                <p className="font-mono text-slate-900 font-semibold">Account #: {settings.bankDetails.accountNumber}</p>
-                {settings.bankDetails.iban && (
-                  <p className="font-mono text-slate-700 text-[10px]">IBAN: {settings.bankDetails.iban}</p>
+                <p className="font-bold text-slate-900">{settings.bankName || settings.bankDetails?.bankName}</p>
+                <p className="text-slate-700">Account Name: {settings.bankAccountTitle || settings.bankDetails?.accountName}</p>
+                <p className="font-mono text-slate-900 font-semibold">Account #: {settings.bankAccountNumber || settings.bankDetails?.accountNumber}</p>
+                {(settings.ibanOrSwift || settings.bankDetails?.iban) && (
+                  <p className="font-mono text-slate-700 text-[10px]">IBAN / SWIFT: {settings.ibanOrSwift || settings.bankDetails?.iban}</p>
                 )}
-                {settings.bankDetails.branchCode && (
+                {settings.bankDetails?.branchCode && (
                   <p className="text-slate-500 text-[10px]">Branch: {settings.bankDetails.branchCode}</p>
                 )}
               </div>
