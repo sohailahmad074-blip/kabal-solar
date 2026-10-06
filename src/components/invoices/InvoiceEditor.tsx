@@ -609,10 +609,15 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
   const taxableBase = Math.max(0, postDiscountTotal - tradeInTotal);
   const taxAmount = (taxableBase * (taxPercent / 100));
   const grandTotal = Math.max(0, Math.round((postDiscountTotal - tradeInTotal + taxAmount + Number(shippingOrFreight || 0) + Number(installationCharge || 0)) * 100) / 100);
-  const balanceDue = Math.max(0, grandTotal - paidAmount);
+  
+  // Quotations are estimates/proposals only - they NEVER carry a pending debt or balanceDue
+  const isQuotation = docType === 'QUOTATION';
+  const balanceDue = isQuotation ? 0 : Math.max(0, grandTotal - paidAmount);
 
   let status: PaymentStatus = 'UNPAID';
-  if (paidAmount >= grandTotal && grandTotal > 0) {
+  if (isQuotation) {
+    status = 'UNPAID';
+  } else if (paidAmount >= grandTotal && grandTotal > 0) {
     status = 'PAID';
   } else if (paidAmount > 0) {
     status = 'PARTIAL';
@@ -710,13 +715,13 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       shippingOrFreight: Number(shippingOrFreight || 0),
       installationCharge: Number(installationCharge || 0),
       grandTotal,
-      paidAmount,
-      balanceDue,
+      paidAmount: isQuotation ? 0 : paidAmount,
+      balanceDue: isQuotation ? 0 : balanceDue,
       specialDiscount: specialDiscountValue > 0 ? Number(specialDiscount) : undefined,
       specialDiscountType: specialDiscountValue > 0 ? specialDiscountType : undefined,
       specialDiscountReason: specialDiscountReason || undefined,
       status,
-      payments: paymentsLog,
+      payments: isQuotation ? [] : paymentsLog,
       accessoriesMode,
       deductFromInventory: docType === 'QUOTATION' ? false : deductFromInventory,
       inventoryDeducted: docType === 'QUOTATION' ? false : existingInvoice?.inventoryDeducted,

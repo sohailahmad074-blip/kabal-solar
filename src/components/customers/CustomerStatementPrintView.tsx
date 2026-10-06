@@ -40,8 +40,10 @@ export const CustomerStatementPrintView: React.FC<CustomerStatementPrintViewProp
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  const totalInvoiced = sortedInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
-  const totalPaid = sortedInvoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
+  // Only actual commercial invoices (not quotations) represent customer billed debits & dues
+  const actualInvoices = sortedInvoices.filter((inv) => inv.type !== 'QUOTATION');
+  const totalInvoiced = actualInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
+  const totalPaid = actualInvoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
   const totalBalanceDue = Math.max(0, totalInvoiced - totalPaid);
 
   // Extract all payment transactions across invoices
@@ -311,28 +313,40 @@ export const CustomerStatementPrintView: React.FC<CustomerStatementPrintViewProp
                     <td className="py-2 px-2.5 font-medium text-slate-700">{formatDate(inv.date)}</td>
                     <td className="py-2 px-2.5 font-mono font-bold text-slate-900">{inv.invoiceNumber}</td>
                     <td className="py-2 px-2.5">
-                      <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                        {inv.type}
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                        inv.type === 'QUOTATION'
+                          ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                          : 'text-slate-600 bg-slate-100'
+                      }`}>
+                        {inv.type === 'QUOTATION' ? 'Quotation (Est.)' : inv.type}
                       </span>
                     </td>
                     <td className="py-2 px-2.5 text-right font-bold text-slate-900">
                       {formatCurrency(inv.grandTotal, settings.currency, settings.currencyPosition)}
                     </td>
                     <td className="py-2 px-2.5 text-right font-medium text-emerald-700">
-                      {formatCurrency(inv.paidAmount, settings.currency, settings.currencyPosition)}
+                      {inv.type === 'QUOTATION' ? '—' : formatCurrency(inv.paidAmount, settings.currency, settings.currencyPosition)}
                     </td>
-                    <td className="py-2 px-2.5 text-right font-bold text-rose-600">
-                      {formatCurrency(inv.balanceDue, settings.currency, settings.currencyPosition)}
+                    <td className="py-2 px-2.5 text-right font-bold">
+                      {inv.type === 'QUOTATION' ? (
+                        <span className="text-slate-400 font-normal text-[11px]">— (Quote)</span>
+                      ) : (
+                        <span className="text-rose-600">
+                          {formatCurrency(inv.balanceDue, settings.currency, settings.currencyPosition)}
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 px-2.5 text-center">
                       <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider ${
-                        inv.status === 'PAID'
+                        inv.type === 'QUOTATION'
+                          ? 'bg-blue-100 text-blue-900'
+                          : inv.status === 'PAID'
                           ? 'bg-emerald-100 text-emerald-900'
                           : inv.status === 'PARTIAL'
                           ? 'bg-amber-100 text-amber-900'
                           : 'bg-rose-100 text-rose-900'
                       }`}>
-                        {inv.status}
+                        {inv.type === 'QUOTATION' ? 'PROPOSAL' : inv.status}
                       </span>
                     </td>
                   </tr>

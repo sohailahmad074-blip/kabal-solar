@@ -22,7 +22,8 @@ import {
   MessageCircle,
   ArrowRightLeft,
   Radio,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Settings
 } from 'lucide-react';
 import { 
   Invoice, 
@@ -58,6 +59,7 @@ interface DashboardProps {
   onSendInvoice?: (invoice: Invoice) => void;
   onOpenSecretProfit?: () => void;
   onOpenCloudSync?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -79,17 +81,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSendInvoice,
   onOpenSecretProfit,
   onOpenCloudSync,
+  onOpenSettings,
 }) => {
   const [isBulkReminderOpen, setIsBulkReminderOpen] = useState(false);
 
-  // Financial calculations
-  const totalInvoiced = invoices.reduce((acc, inv) => acc + inv.grandTotal, 0);
-  const totalCollected = invoices.reduce((acc, inv) => acc + inv.paidAmount, 0);
-  const totalReceivables = invoices.reduce((acc, inv) => acc + inv.balanceDue, 0);
+  // Separate commercial invoices from quotations (quotations are estimates only, zero debt/pending)
+  const actualInvoices = invoices.filter(i => i.type !== 'QUOTATION');
+  const quotations = invoices.filter(i => i.type === 'QUOTATION');
+
+  // Financial calculations (Excludes quotations - quotations never add to sales revenue or pending receivables)
+  const totalInvoiced = actualInvoices.reduce((acc, inv) => acc + inv.grandTotal, 0);
+  const totalCollected = actualInvoices.reduce((acc, inv) => acc + inv.paidAmount, 0);
+  const totalReceivables = actualInvoices.reduce((acc, inv) => acc + inv.balanceDue, 0);
   const totalExpenses = expenses.reduce((acc, exp) => acc + exp.amount, 0);
   
   // Cost of Goods for invoiced products
-  const estimatedCOGS = invoices.reduce((acc, inv) => {
+  const estimatedCOGS = actualInvoices.reduce((acc, inv) => {
     return acc + inv.items.reduce((itemAcc, itm) => itemAcc + ((itm.costPrice || 0) * itm.quantity), 0);
   }, 0);
 
@@ -102,7 +109,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   
   // Stock alert items
   const lowStockItems = products.filter(p => p.category !== 'SERVICES_LABOR' && p.stockQty <= p.minStockAlert);
-  const pendingInvoices = invoices.filter(i => i.balanceDue > 0);
+  const pendingInvoices = actualInvoices.filter(i => i.balanceDue > 0);
 
   // System type distribution
   const residentialCount = customers.filter(c => c.customerType === 'RESIDENTIAL').length;
@@ -231,6 +238,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <Calculator className="h-3.5 w-3.5 text-slate-500" />
             <span className="hidden sm:inline">Solar Estimator</span>
           </button>
+
+          {/* Action 5: Shop Settings Window */}
+          {(onOpenSettings || setActiveTab) && (
+            <button
+              type="button"
+              onClick={onOpenSettings || (() => setActiveTab && setActiveTab('SETTINGS'))}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-amber-50 text-slate-700 hover:text-amber-900 border border-slate-200 hover:border-amber-300 text-xs font-semibold transition-all cursor-pointer group"
+              title="Open Solar Shop Settings Window"
+            >
+              <Settings className="h-3.5 w-3.5 text-slate-500 group-hover:text-amber-600 group-hover:rotate-45 transition-transform" />
+              <span>Shop Settings</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -239,7 +259,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <StatsCard
           title="Sales Revenue"
           value={formatCurrency(totalInvoiced, settings.currency, settings.currencyPosition)}
-          subtitle={`${invoices.length} Invoices • View Reports →`}
+          subtitle={`${actualInvoices.length} Invoices${quotations.length > 0 ? ` • ${quotations.length} Quotes` : ''} • View Reports →`}
           icon={<BarChart3 className="h-4 w-4" />}
           trend={{ value: 'Daily/Mo/Yr', isPositive: true }}
           accentColor="amber"

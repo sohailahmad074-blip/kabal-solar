@@ -57,6 +57,7 @@ import { BarcodeScannerModal } from './components/inventory/BarcodeScannerModal'
 import { SolarSystemEstimator } from './components/calculator/SolarSystemEstimator';
 import { SalesReportView } from './components/reports/SalesReportView';
 import { SettingsView } from './components/settings/SettingsView';
+import { ShopSettingsModal } from './components/settings/ShopSettingsModal';
 import { SecretProfitWindow } from './components/profit/SecretProfitWindow';
 import { CloudSyncModal } from './components/sync/CloudSyncModal';
 import { GitHubPublishModal } from './components/sync/GitHubPublishModal';
@@ -206,6 +207,9 @@ export function App() {
   // Barcode Scanner Modal State
   const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
   const [barcodeScannerInitialMode, setBarcodeScannerInitialMode] = useState<'STOCK_IN' | 'STOCK_OUT' | 'LOG' | 'LABELS'>('STOCK_IN');
+
+  // Shop Settings Window Modal State
+  const [isShopSettingsModalOpen, setIsShopSettingsModalOpen] = useState(false);
 
   // Secret Owner Profit Vault Modal State
   const [isSecretProfitOpen, setIsSecretProfitOpen] = useState(false);
@@ -437,11 +441,11 @@ export function App() {
     saveStockMovements(stockMovements);
   }, [stockMovements]);
 
-  // Recalculate customer totals whenever invoices change
+  // Recalculate customer totals whenever invoices change (quotations are estimates only, zero debt/pending)
   const refreshCustomerBalances = (currentInvoices: Invoice[]) => {
     setCustomers((prevCustomers) =>
       prevCustomers.map((cust) => {
-        const custInvoices = currentInvoices.filter((i) => i.customerId === cust.id);
+        const custInvoices = currentInvoices.filter((i) => i.customerId === cust.id && i.type !== 'QUOTATION');
         const totalInvoiced = custInvoices.reduce((acc, i) => acc + i.grandTotal, 0);
         const totalPaid = custInvoices.reduce((acc, i) => acc + i.paidAmount, 0);
         const balanceDue = custInvoices.reduce((acc, i) => acc + i.balanceDue, 0);
@@ -552,7 +556,7 @@ export function App() {
     }
 
     const updatedCustomers = customers.map((cust) => {
-      const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id);
+      const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id && i.type !== 'QUOTATION');
       const totalInvoiced = custInvoices.reduce((acc, i) => acc + (Number(i.grandTotal) || 0), 0);
       const totalPaid = custInvoices.reduce((acc, i) => acc + (Number(i.paidAmount) || 0), 0);
       const balanceDue = custInvoices.reduce((acc, i) => acc + (Number(i.balanceDue) || 0), 0);
@@ -668,7 +672,7 @@ export function App() {
     }
 
     const updatedCustomers = customers.map((cust) => {
-      const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id);
+      const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id && i.type !== 'QUOTATION');
       const totalInvoiced = custInvoices.reduce((acc, i) => acc + (Number(i.grandTotal) || 0), 0);
       const totalPaid = custInvoices.reduce((acc, i) => acc + (Number(i.paidAmount) || 0), 0);
       const balanceDue = custInvoices.reduce((acc, i) => acc + (Number(i.balanceDue) || 0), 0);
@@ -826,9 +830,9 @@ export function App() {
       updatedInvoices = [ledgerInv, ...invoices];
     }
 
-    // Immediately recalculate customer balance totals
+    // Immediately recalculate customer balance totals (quotations carry zero debt/pending)
     const updatedCustomers = customers.map((cust) => {
-      const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id);
+      const custInvoices = updatedInvoices.filter((i) => i.customerId === cust.id && i.type !== 'QUOTATION');
       const totalInvoiced = custInvoices.reduce((acc, i) => acc + (Number(i.grandTotal) || 0), 0);
       const totalPaid = custInvoices.reduce((acc, i) => acc + (Number(i.paidAmount) || 0), 0);
       const balanceDue = custInvoices.reduce((acc, i) => acc + (Number(i.balanceDue) || 0), 0);
@@ -1123,7 +1127,9 @@ export function App() {
       taxAmount: 0,
       grandTotal: estimateData.estimatedCost + Math.round(estimateData.systemCapacityKw * 45) + 80,
       paidAmount: 0,
-      balanceDue: estimateData.estimatedCost + Math.round(estimateData.systemCapacityKw * 45) + 80,
+      balanceDue: 0, // Quotations carry zero debt or balance due
+      deductFromInventory: false,
+      inventoryDeducted: false,
       payments: [],
       termsAndConditions: settings.termsAndConditions || settings.defaultTerms,
       warrantyNotes: settings.warrantyDisclaimer || settings.defaultWarrantyTerms,
@@ -1135,12 +1141,14 @@ export function App() {
     setIsInvoiceEditorOpen(true);
   };
 
-  // Create clean Quotation draft (Zero stock deduction)
+  // Create clean Quotation draft (Zero stock deduction, zero debt/pending)
   const handleCreateQuotation = () => {
     setEditingInvoice({
       type: 'QUOTATION',
       deductFromInventory: false,
       inventoryDeducted: false,
+      paidAmount: 0,
+      balanceDue: 0,
     } as any);
     setIsInvoiceEditorOpen(true);
   };
@@ -1182,7 +1190,7 @@ export function App() {
   const lowStockBadgeCount = products.filter(
     (p) => p.category !== 'SERVICES_LABOR' && p.stockQty <= p.minStockAlert
   ).length;
-  const pendingInvoicesCount = invoices.filter((i) => i.balanceDue > 0).length;
+  const pendingInvoicesCount = invoices.filter((i) => i.type !== 'QUOTATION' && i.balanceDue > 0).length;
 
   // Strict Private Mode Guard - Requires PIN Unlock to Access Software
   if (isPrivateLocked) {
@@ -1201,6 +1209,7 @@ export function App() {
         activeTab={activeTab}
         setActiveTab={(tab) => {
           setPrintingInvoice(null);
+          setPrintingCustomerStatement(null);
           setActiveTab(tab);
         }}
         lowStockCount={lowStockBadgeCount}
@@ -1209,6 +1218,7 @@ export function App() {
         onOpenRoleSwitch={() => setIsRoleSwitchModalOpen(true)}
         onLockSoftware={handleLockSoftware}
         onOpenNewQuotation={handleCreateQuotation}
+        onOpenSettings={() => setIsShopSettingsModalOpen(true)}
         settings={settings}
         onOpenBarcodeScanner={handleOpenBarcodeScanner}
         onOpenSecretProfit={() => setIsSecretProfitOpen(true)}
@@ -1223,9 +1233,19 @@ export function App() {
         <Navbar
           settings={settings}
           currentRole={currentRole}
+          activeTab={activeTab}
+          setActiveTab={(tab) => {
+            setPrintingInvoice(null);
+            setPrintingCustomerStatement(null);
+            setActiveTab(tab);
+          }}
           onOpenRoleSwitch={() => setIsRoleSwitchModalOpen(true)}
           onLockSoftware={handleLockSoftware}
-          onOpenEstimator={() => setActiveTab('ESTIMATOR')}
+          onOpenEstimator={() => {
+            setPrintingInvoice(null);
+            setPrintingCustomerStatement(null);
+            setActiveTab('ESTIMATOR');
+          }}
           onOpenNewInvoice={() => {
             setEditingInvoice(null);
             setIsInvoiceEditorOpen(true);
@@ -1237,6 +1257,7 @@ export function App() {
           }}
           onOpenBarcodeScanner={handleOpenBarcodeScanner}
           onOpenSecretProfit={() => setIsSecretProfitOpen(true)}
+          onOpenSettings={() => setIsShopSettingsModalOpen(true)}
           onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
           onOpenGitHub={() => setIsGitHubModalOpen(true)}
           syncStatus={syncStatus}
@@ -1334,6 +1355,7 @@ export function App() {
                     setIsSendDirectOpen(true);
                   }}
                   onOpenSecretProfit={() => setIsSecretProfitOpen(true)}
+                  onOpenSettings={() => setIsShopSettingsModalOpen(true)}
                 />
               )}
 
@@ -1494,6 +1516,21 @@ export function App() {
       </div>
 
       {/* --- ALL SYSTEM MODALS --- */}
+
+      {/* Shop Settings Window Modal */}
+      <ShopSettingsModal
+        isOpen={isShopSettingsModalOpen}
+        onClose={() => setIsShopSettingsModalOpen(false)}
+        settings={settings}
+        onSaveSettings={(newSettings) => setSettings(newSettings)}
+        onResetData={handleResetData}
+        allAppData={allAppData}
+        onImportData={handleImportData}
+        onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+        onOpenGitHub={() => setIsGitHubModalOpen(true)}
+        onSwitchRole={handleSelectRole}
+        onLockSoftware={handleLockSoftware}
+      />
 
       {/* Role & Partner Access Management Modal */}
       <RoleSwitchModal

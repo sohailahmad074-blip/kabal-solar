@@ -55,13 +55,14 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   const [reminderCustomNote, setReminderCustomNote] = useState<string>('');
 
   const customerInvoices = invoices.filter((i) => i.customerId === customer.id);
-  const totalInvoiced = customer.totalInvoiced || customerInvoices.reduce((acc, i) => acc + (i.grandTotal || 0), 0);
-  const totalPaid = customer.totalPaid || customerInvoices.reduce((acc, i) => acc + (i.paidAmount || 0), 0);
-  const balanceDue = customer.balanceDue || Math.max(0, totalInvoiced - totalPaid);
+  const actualInvoices = customerInvoices.filter((i) => i.type !== 'QUOTATION');
+  const totalInvoiced = actualInvoices.reduce((acc, i) => acc + (i.grandTotal || 0), 0);
+  const totalPaid = actualInvoices.reduce((acc, i) => acc + (i.paidAmount || 0), 0);
+  const balanceDue = Math.max(0, totalInvoiced - totalPaid);
   const paidPct = totalInvoiced > 0 ? Math.min(100, Math.round((totalPaid / totalInvoiced) * 100)) : 100;
   const hasDue = balanceDue > 0;
-  const pendingInvoices = customerInvoices.filter((i) => i.balanceDue > 0);
-  const primaryPendingInvoice = pendingInvoices[0] || customerInvoices[0];
+  const pendingInvoices = actualInvoices.filter((i) => i.balanceDue > 0);
+  const primaryPendingInvoice = pendingInvoices[0] || actualInvoices[0];
 
   const handleSendWhatsAppReminder = () => {
     const targetPhone = customer.whatsapp || customer.phone || '';

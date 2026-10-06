@@ -65,9 +65,14 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const totalInvoiced = filteredInvoices.reduce((acc, inv) => acc + inv.grandTotal, 0);
-  const totalPaid = filteredInvoices.reduce((acc, inv) => acc + inv.paidAmount, 0);
-  const totalDue = filteredInvoices.reduce((acc, inv) => acc + inv.balanceDue, 0);
+  // Separate actual commercial invoices from quotations (quotations are estimates only, zero debt/pending)
+  const filteredActualInvoices = filteredInvoices.filter((inv) => inv.type !== 'QUOTATION');
+  const filteredQuotations = filteredInvoices.filter((inv) => inv.type === 'QUOTATION');
+
+  const totalInvoiced = filteredActualInvoices.reduce((acc, inv) => acc + inv.grandTotal, 0);
+  const totalPaid = filteredActualInvoices.reduce((acc, inv) => acc + inv.paidAmount, 0);
+  const totalDue = filteredActualInvoices.reduce((acc, inv) => acc + inv.balanceDue, 0);
+  const totalQuotationValue = filteredQuotations.reduce((acc, inv) => acc + inv.grandTotal, 0);
 
   const quotationCount = invoices.filter((i) => i.type === 'QUOTATION').length;
   const invoiceCount = invoices.filter((i) => i.type === 'INVOICE').length;
@@ -226,29 +231,59 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
 
       {/* Summary Chips */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Billed</p>
-          <p className="mt-0.5 text-xl font-bold text-slate-900">
-            {formatCurrency(totalInvoiced, settings.currency, settings.currencyPosition)}
-          </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">{filteredInvoices.length} invoices displayed</p>
-        </div>
+        {typeFilter === 'QUOTATION' ? (
+          <>
+            <div className="rounded-lg border border-blue-200 bg-white p-3 shadow-xs">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Total Quotation Value</p>
+              <p className="mt-0.5 text-xl font-bold text-blue-900">
+                {formatCurrency(totalQuotationValue, settings.currency, settings.currencyPosition)}
+              </p>
+              <p className="text-[11px] text-blue-600 mt-0.5">{filteredQuotations.length} estimate proposals</p>
+            </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Total Collected</p>
-          <p className="mt-0.5 text-xl font-bold text-emerald-700">
-            {formatCurrency(totalPaid, settings.currency, settings.currencyPosition)}
-          </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Cleared in bank / cash</p>
-        </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Pending Debt / Balance</p>
+              <p className="mt-0.5 text-xl font-bold text-slate-800 font-mono">
+                {formatCurrency(0, settings.currency, settings.currencyPosition)}
+              </p>
+              <p className="text-[11px] text-emerald-600 mt-0.5 font-semibold">🛡️ Zero pending (Quotes carry no debt)</p>
+            </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Outstanding Balance</p>
-          <p className="mt-0.5 text-xl font-bold text-amber-700">
-            {formatCurrency(totalDue, settings.currency, settings.currencyPosition)}
-          </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Pending customer milestones</p>
-        </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Inventory Stock Impact</p>
+              <p className="mt-0.5 text-xl font-bold text-emerald-800">
+                0 Units Deducted
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Catalog & manual non-stock items</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Billed</p>
+              <p className="mt-0.5 text-xl font-bold text-slate-900">
+                {formatCurrency(totalInvoiced, settings.currency, settings.currencyPosition)}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">{filteredActualInvoices.length} invoices displayed{filteredQuotations.length > 0 ? ` (${filteredQuotations.length} quotes excluded)` : ''}</p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Total Collected</p>
+              <p className="mt-0.5 text-xl font-bold text-emerald-700">
+                {formatCurrency(totalPaid, settings.currency, settings.currencyPosition)}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Cleared in bank / cash</p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Outstanding Balance</p>
+              <p className="mt-0.5 text-xl font-bold text-amber-700">
+                {formatCurrency(totalDue, settings.currency, settings.currencyPosition)}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Pending customer milestones (excludes quotes)</p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Search and Filters Bar */}

@@ -207,17 +207,23 @@ export const SalesReportView: React.FC<SalesReportViewProps> = ({
     });
   }, [expenses, period, selectedDate, selectedMonth, selectedYear, customStartDate, customEndDate]);
 
-  // Core Financial Aggregates
+  // Core Financial Aggregates (Quotations are excluded from invoiced revenue and pending receivables)
   const totalInvoiced = useMemo(() => {
-    return filteredInvoices.reduce((acc, inv) => acc + (inv.grandTotal || 0), 0);
-  }, [filteredInvoices]);
+    return filteredInvoices
+      .filter((inv) => typeFilter === 'QUOTATION' ? inv.type === 'QUOTATION' : inv.type !== 'QUOTATION')
+      .reduce((acc, inv) => acc + (inv.grandTotal || 0), 0);
+  }, [filteredInvoices, typeFilter]);
 
   const totalCollected = useMemo(() => {
-    return filteredInvoices.reduce((acc, inv) => acc + (inv.paidAmount || 0), 0);
+    return filteredInvoices
+      .filter((inv) => inv.type !== 'QUOTATION')
+      .reduce((acc, inv) => acc + (inv.paidAmount || 0), 0);
   }, [filteredInvoices]);
 
   const totalReceivables = useMemo(() => {
-    return filteredInvoices.reduce((acc, inv) => acc + (inv.balanceDue || 0), 0);
+    return filteredInvoices
+      .filter((inv) => inv.type !== 'QUOTATION')
+      .reduce((acc, inv) => acc + (inv.balanceDue || 0), 0);
   }, [filteredInvoices]);
 
   const totalExpensesAmount = useMemo(() => {

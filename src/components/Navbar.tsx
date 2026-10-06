@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   UserCheck,
   Github,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Settings
 } from 'lucide-react';
 import { ShopSettings, ProductItem, UserRole } from '../types/solar';
 import { SyncStatus } from '../services/cloudSync';
@@ -34,6 +35,7 @@ interface NavbarProps {
   onOpenQuickPO?: () => void;
   onOpenBarcodeScanner?: (mode?: 'STOCK_IN' | 'STOCK_OUT' | 'LOG' | 'LABELS') => void;
   onOpenSecretProfit?: () => void;
+  onOpenSettings?: () => void;
   onOpenCloudSync?: () => void;
   onOpenGitHub?: () => void;
   syncStatus?: SyncStatus;
@@ -55,6 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenQuickPO,
   onOpenBarcodeScanner,
   onOpenSecretProfit,
+  onOpenSettings,
   onOpenCloudSync,
   onOpenGitHub,
   syncStatus = 'connected',
@@ -245,6 +248,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="sm:hidden">
               {syncStatus === 'live_1s' || syncStatus === 'connected' ? '⚡ 1s' : 'Sync'}
             </span>
+          </button>
+        )}
+
+        {/* Shop Settings Window Trigger (Owner Only) */}
+        {!isPartner && onOpenSettings && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 border border-slate-300 hover:border-amber-300 rounded-lg transition-all cursor-pointer shadow-2xs group"
+            title="Open Shop Settings Window (Business profile, tax, banking, categories, terms)"
+          >
+            <Settings className="h-3.5 w-3.5 text-slate-700 group-hover:text-amber-700 group-hover:rotate-45 transition-transform" />
+            <span className="hidden sm:inline">Shop Settings</span>
+            <span className="sm:hidden">Settings</span>
           </button>
         )}
 

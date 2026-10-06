@@ -34,6 +34,7 @@ interface SidebarProps {
   onOpenRoleSwitch?: () => void;
   onLockSoftware?: () => void;
   onOpenNewQuotation?: () => void;
+  onOpenSettings?: () => void;
   settings?: ShopSettings;
   onOpenBarcodeScanner?: (mode?: 'STOCK_IN' | 'STOCK_OUT' | 'LOG' | 'LABELS') => void;
   onOpenSecretProfit?: () => void;
@@ -51,6 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenRoleSwitch,
   onLockSoftware,
   onOpenNewQuotation,
+  onOpenSettings,
   settings,
   onOpenBarcodeScanner,
   onOpenSecretProfit,
@@ -148,7 +150,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             key={item.id}
             type="button"
-            onClick={() => setActiveTab(item.id)}
+            onClick={() => {
+              setActiveTab(item.id);
+              if (item.id === 'SETTINGS' && onOpenSettings) {
+                onOpenSettings();
+              }
+            }}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               isActive
                 ? 'bg-slate-800 text-white font-semibold shadow-xs'
@@ -446,6 +453,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="flex items-center gap-1">
+            {!isPartner && onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="p-1.5 rounded text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Shop Settings Window"
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </button>
+            )}
+
             {onOpenRoleSwitch && (
               <button
                 type="button"
